@@ -11,6 +11,15 @@ const Login = () => {
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
 
+    // If a token already exists, redirect to dashboard immediately.
+    // This prevents a logged-in user from seeing the login page via back-navigation.
+    React.useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            navigate('/dashboard', { replace: true });
+        }
+    }, [navigate]);
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setCredentials((prev) => ({ ...prev, [name]: value }));
@@ -41,7 +50,7 @@ const Login = () => {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('role', data.role);
 
-                navigate('/dashboard');
+                navigate('/dashboard', { replace: true });
             } else {
                 const errorData = await response.text();
                 setError(errorData || 'Invalid username or password.');
