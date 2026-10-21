@@ -1,50 +1,42 @@
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { ThemeProvider, CssBaseline, Box, Typography, Paper, AppBar, Toolbar } from '@mui/material';
-import { theme } from './theme';
-import axios from 'axios';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Login from './modules/login/Login';
+import Dashboard from './modules/dashboard/Dashboard'; // Import the new component
 
-const queryClient = new QueryClient();
+const ProtectedRoute = ({ children, allowedRoles }) => {
+    const token = localStorage.getItem('token');
+    const role = localStorage.getItem('role');
 
-function HealthCheck() {
-  const { data, error, isLoading } = useQuery({
-    queryKey: ['health'],
-    queryFn: () => axios.get('/api/health').then(res => res.data)
-  });
+    if (!token) {
+        return <Navigate to="/login" replace />;
+    }
 
-  return (
-    <Paper sx={{ p: 3, mt: 4, maxWidth: 600, mx: 'auto' }}>
-      <Typography variant="h6" gutterBottom>System Status</Typography>
-      {isLoading && <Typography>Connecting to backend...</Typography>}
-      {error && <Typography color="error">Backend connection failed. Ensure Spring Boot is running.</Typography>}
-      {data && (
-        <Typography color="success.main">
-          Connected! Backend reports: {data.status} ({data.service})
-        </Typography>
-      )}
-    </Paper>
-  );
-}
+    if (allowedRoles && !allowedRoles.includes(role)) {
+        return <div>Unauthorized Access</div>;
+    }
+
+    return children;
+};
 
 function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Box sx={{ flexGrow: 1, minHeight: '100vh' }}>
-          <AppBar position="static" sx={{ backgroundColor: 'text.primary' }}>
-            <Toolbar>
-              <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-                Aeliya Orbit - Development Foundation
-              </Typography>
-            </Toolbar>
-          </AppBar>
-          <Box p={3}>
-            <HealthCheck />
-          </Box>
-        </Box>
-      </ThemeProvider>
-    </QueryClientProvider>
-  );
+    return (
+        <Router>
+            <Routes>
+                <Route path="/login" element={<Login />} />
+
+                <Route 
+                    path="/dashboard" 
+                    element={
+                        <ProtectedRoute allowedRoles={['ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_USER', 'SUPER_ADMIN', 'ADMIN', 'USER']}>
+                            <Dashboard />
+                        </ProtectedRoute>
+                    } 
+                />
+
+                <Route path="*" element={<Navigate to="/login" replace />} />
+            </Routes>
+        </Router>
+    );
 }
 
 export default App;
