@@ -82,5 +82,4 @@ build/
 
 application.yml
 compose.yaml
-
-application.properties
+backend/src/main/resources/application.properties
