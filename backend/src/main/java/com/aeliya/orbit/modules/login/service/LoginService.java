@@ -26,7 +26,10 @@ public class LoginService {
 
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
         
-        String role = userDetails.getAuthorities().iterator().next().getAuthority();
+        String role = userDetails.getAuthorities().stream()
+                .map(authority -> authority.getAuthority())
+                .filter(authority -> authority.startsWith("ROLE_"))
+                .findFirst().orElseThrow();
         String jwt = jwtUtil.generateToken(userDetails);
 
         return new LoginResponse(jwt, role);

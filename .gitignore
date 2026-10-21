@@ -82,3 +82,5 @@ build/
 
 application.yml
 compose.yaml
+
+application.properties

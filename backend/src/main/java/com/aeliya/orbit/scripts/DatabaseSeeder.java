@@ -1,43 +1,46 @@
-// backend/src/main/java/com/aeliya/orbit/scripts/DatabaseSeeder.java
 package com.aeliya.orbit.scripts;
 
 import com.aeliya.orbit.modules.user.entity.User;
 import com.aeliya.orbit.modules.user.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class DatabaseSeeder implements CommandLineRunner {
+    private final UserRepository users;
+    private final PasswordEncoder encoder;
+    private final JdbcTemplate jdbc;
 
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @Override
-    public void run(String... args) throws Exception {
-        seedSuperAdmin();
+    public DatabaseSeeder(UserRepository users, PasswordEncoder encoder, JdbcTemplate jdbc) {
+        this.users = users;
+        this.encoder = encoder;
+        this.jdbc = jdbc;
     }
 
-    private void seedSuperAdmin() {
-        String superAdminUsername = "param";
-        
-        // Check if the user already exists to prevent duplicate entries on restarts
-        if (userRepository.findByUsername(superAdminUsername).isEmpty()) {
-            System.out.println("Seeding Super Admin user...");
-            
-            // Hash the password before saving to the database
-            String hashedPassword = passwordEncoder.encode("Param@4112"); 
-            
-            User superAdmin = new User(superAdminUsername, hashedPassword, "ROLE_SUPER_ADMIN");
-            userRepository.save(superAdmin);
-            
-            System.out.println("Super Admin seeded successfully! Username: param | Password: Param@4112!");
-        } else {
-            System.out.println("Super Admin already exists. Skipping database seed.");
+    @Override
+    @Transactional
+    public void run(String... args) {
+        bootstrap(System.getenv("BOOTSTRAP_SUPER_ADMIN_USERNAME"),
+            System.getenv("BOOTSTRAP_SUPER_ADMIN_PASSWORD"));
+    }
+
+    void bootstrap(String username, String password) {
+        if (username == null && password == null) {
+            return;
         }
+        if (username == null || username.isBlank() || password == null || password.isBlank()) {
+            throw new IllegalStateException("Both bootstrap credentials must be supplied");
+        }
+        jdbc.queryForList("SELECT pg_advisory_xact_lock(hashtext('aeliya-bootstrap-super-admin'))");
+        if (users.existsByRole("ROLE_SUPER_ADMIN")) {
+            return;
+        }
+        if (users.findByUsername(username).isPresent()) {
+            throw new IllegalStateException("Bootstrap username already belongs to an account");
+        }
+        users.save(new User(username, encoder.encode(password), "ROLE_SUPER_ADMIN"));
     }
 }
