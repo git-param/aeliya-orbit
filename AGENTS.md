@@ -1,0 +1,2 @@
+# AI Agent Instructions
+Refer to the `docs/` directory for architecture guidelines, permissions models, and product scope. Do not deviate from the modular monolith approach. Ensure all generated code adheres to the tech stack (Spring Boot + React/Vite). Do not expose secrets or invent business logic not specified in requirements.

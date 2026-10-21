@@ -1,0 +1,7 @@
+1. start the backend
+cd backend
+./mvnw spring-boot:run
+
+2. start the frontend
+cd frontend 
+npm run dev

@@ -1,0 +1,7 @@
+CREATE TABLE system_status (
+    id SERIAL PRIMARY KEY,
+    status VARCHAR(50) NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO system_status (status) VALUES ('INITIALIZED');
