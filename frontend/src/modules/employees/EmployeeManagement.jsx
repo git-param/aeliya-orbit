@@ -4,7 +4,7 @@ import { Icon, initials } from '../../components/UI.jsx';
 import '../dashboard/Dashboard.css';
 import './EmployeeManagement.css';
 
-const blank = {employeeCode: '', fullName: '', workEmail: '', dateOfJoining: '', address: '', phone: '', dateOfBirth: '', departmentId: null, designationId: null, levelId: null, reportingManagerId: null};
+const blank = {employeeCode: '', accountId: null, fullName: '', workEmail: '', dateOfJoining: '', address: '', phone: '', dateOfBirth: '', departmentId: null, designationId: null, levelId: null, reportingManagerId: null};
 
 function Field({ label, wide, children }) {
   return <label className={`field ${wide ? 'wide' : ''}`}>{label}{children}</label>;
@@ -19,19 +19,26 @@ export default function EmployeeManagement({ user }) {
   const [form, setForm] = useState(blank);
   const [editingId, setEditingId] = useState(null);
   const [drawer, setDrawer] = useState(false);
+  const [details, setDetails] = useState(null);
   const [picture, setPicture] = useState(null);
+  const [managerSearch, setManagerSearch] = useState('');
+  const [managers, setManagers] = useState([]);
+  const [accountSearch, setAccountSearch] = useState('');
+  const [accounts, setAccounts] = useState([]);
+  const [selectedAccount, setSelectedAccount] = useState(null);
   const [options, setOptions] = useState({DEPARTMENT: [], DESIGNATION: [], LEVEL: []});
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const canCreate = user.permissions.includes('EMPLOYEE_CREATE');
   const canDeactivate = user.permissions.includes('EMPLOYEE_DEACTIVATE');
   const canUpdate = user.permissions.includes('EMPLOYEE_UPDATE');
   const set = (key, value) => setForm(f => ({...f, [key]: value}));
-  const close = () => {setDrawer(false); setEditingId(null); setForm(blank); setPicture(null);};
+  const close = () => {setDrawer(false); setDetails(null); setEditingId(null); setForm(blank); setPicture(null); setManagerSearch(''); setAccountSearch(''); setSelectedAccount(null);};
 
-  const load = async () => {
+  const load = async (targetPage = page, targetQuery = query) => {
     setBusy(true);
-    try { const result = await hrApi.employees(page, query); setEmployees(result.content); setPages(result.totalPages); setError(''); }
+    try { const result = await hrApi.employees(targetPage, targetQuery); setEmployees(result.content); setPages(result.totalPages); setError(''); }
     catch { setError('Unable to load employees. Refresh and try again.'); }
     finally { setBusy(false); }
   };
@@ -43,6 +50,22 @@ export default function EmployeeManagement({ user }) {
       .catch(() => setError('Department, designation and level lists are unavailable.'));
   }, []);
   useEffect(() => {
+    if (!drawer || (details && !editingId)) return;
+    let active = true;
+    const timer = setTimeout(() => hrApi.managerOptions(managerSearch.trim())
+      .then(result => { if (active) setManagers(result); })
+      .catch(() => { if (active) setError('Reporting manager choices are unavailable.'); }), 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [drawer, details, editingId, managerSearch]);
+  useEffect(() => {
+    if (!drawer || editingId || details || user.role !== 'ROLE_SUPER_ADMIN') return;
+    let active = true;
+    const timer = setTimeout(() => hrApi.availableAccounts(accountSearch.trim())
+      .then(result => { if (active) setAccounts(result); })
+      .catch(() => { if (active) setError('Available account choices are unavailable.'); }), 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [drawer, editingId, details, accountSearch, user.role]);
+  useEffect(() => {
     if (!drawer) return;
     const onKey = e => e.key === 'Escape' && close();
     window.addEventListener('keydown', onKey);
@@ -50,12 +73,15 @@ export default function EmployeeManagement({ user }) {
   }, [drawer]);
 
   const save = async event => {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault(); setBusy(true); setError(''); setNotice('');
     try {
       const input = {...form, dateOfBirth: form.dateOfBirth || null};
       const saved = editingId ? await hrApi.updateEmployee(editingId, input) : await hrApi.createEmployee(input);
-      if (picture) await hrApi.uploadPicture(saved.id, picture);
-      close(); setPage(0); await load();
+      if (picture) {
+        try { await hrApi.uploadPicture(saved.id, picture); }
+        catch { setNotice('Employee saved, but the picture could not be uploaded. Edit the profile to try again.'); }
+      } else setNotice(editingId ? 'Employee updated.' : 'Employee created.');
+      close(); setPage(0); await load(0, query);
     } catch { setError('Employee could not be saved. Check the required fields and that the ID and email are unique.'); }
     finally { setBusy(false); }
   };
@@ -63,40 +89,53 @@ export default function EmployeeManagement({ user }) {
     try {
       const d = await hrApi.employee(employee.id);
       setEditingId(d.id);
+      setDetails(d);
       setForm({employeeCode: d.employeeCode, fullName: d.fullName, workEmail: d.workEmail, dateOfJoining: d.dateOfJoining,
         address: d.address || '', phone: d.phone || '', dateOfBirth: d.dateOfBirth || '', departmentId: d.departmentId,
         designationId: d.designationId, levelId: d.levelId, reportingManagerId: d.reportingManagerId});
       setDrawer(true);
     } catch { setError('Employee details could not be loaded.'); }
   };
+  const view = async employee => {
+    try { setDetails(await hrApi.employee(employee.id)); setEditingId(null); setDrawer(true); }
+    catch { setError('Employee details could not be loaded.'); }
+  };
   const deactivate = async employee => {
     if (!window.confirm(`Deactivate ${employee.fullName}? Their login will be disabled and their records kept.`)) return;
-    try { await hrApi.deactivateEmployee(employee.id); await load(); }
+    try { await hrApi.deactivateEmployee(employee.id); await load(); setNotice('Employee deactivated; historical records were kept.'); }
     catch { setError('Employee could not be deactivated.'); }
   };
-  const select = (label, key, list) => <Field label={label}>
+  const reactivate = async employee => {
+    if (!window.confirm(`Reactivate ${employee.fullName}'s employee profile? Any linked login remains disabled until separately authorized.`)) return;
+    try { await hrApi.reactivateEmployee(employee.id); await load(); setNotice('Employee profile reactivated. A linked login remains disabled.'); }
+    catch { setError('Employee could not be reactivated.'); }
+  };
+  const select = (label, key, list, currentName) => <Field label={label}>
     <select value={form[key] || ''} onChange={e => set(key, e.target.value ? Number(e.target.value) : null)}>
-      <option value="">Not assigned</option>{list.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+      <option value="">Not assigned</option>{form[key] && !list.some(o => o.id === form[key]) && <option value={form[key]}>{currentName || 'Archived value'} (archived)</option>}{list.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
     </select></Field>;
 
   return <>
     {error && <p role="alert" className="banner error">{error}</p>}
+    {notice && <p role="status" className="banner">{notice}</p>}
     <section className="card directory">
       <div className="toolbar">
         <div className="search"><Icon name="search" size={16} /><input aria-label="Search employees" placeholder="Search by name or employee ID" value={search} onChange={e => setSearch(e.target.value)} /></div>
         <div className="toolbar-end">{busy && <span role="status" className="muted">Loading…</span>}
-          {canCreate && <button className="btn primary" onClick={() => setDrawer(true)}><Icon name="plus" size={15} /> Add employee</button>}</div>
+          {canCreate && <button className="btn primary" onClick={() => {close(); setDrawer(true);}}><Icon name="plus" size={15} /> Add employee</button>}</div>
       </div>
       <div className="table-wrap"><table>
-        <thead><tr><th>Employee</th><th>Work email</th><th>Department</th><th>Status</th>{(canUpdate || canDeactivate) && <th aria-label="Actions" />}</tr></thead>
+        <thead><tr><th>Employee</th><th>Work email</th><th>Department</th><th>Designation</th><th>Status</th><th aria-label="Actions" /></tr></thead>
         <tbody>{employees.map(e => <tr key={e.id}>
           <td><div className="who"><span className="person-avatar">{initials(e.fullName)}</span><div><strong>{e.fullName}</strong><small>{e.employeeCode}</small></div></div></td>
-          <td>{e.workEmail}</td><td>{e.department || '—'}</td>
+          <td>{e.workEmail}</td><td>{e.department || '—'}</td><td>{e.designation || '—'}</td>
           <td><span className={`status-pill ${e.active ? '' : 'off'}`}>{e.active ? 'Active' : 'Inactive'}</span></td>
-          {(canUpdate || canDeactivate) && <td><div className="row-actions">
+          <td><div className="row-actions">
+            <button className="btn" onClick={() => view(e)}>View</button>
             {canUpdate && <button className="icon-button" title="Edit" aria-label={`Edit ${e.fullName}`} onClick={() => edit(e)}><Icon name="edit" size={15} /></button>}
             {canDeactivate && e.active && <button className="icon-button danger" title="Deactivate" aria-label={`Deactivate ${e.fullName}`} onClick={() => deactivate(e)}><Icon name="ban" size={15} /></button>}
-          </div></td>}
+            {canUpdate && !e.active && <button className="btn" onClick={() => reactivate(e)}>Reactivate</button>}
+          </div></td>
         </tr>)}</tbody>
       </table></div>
       {!busy && employees.length === 0 && <div className="empty"><Icon name="users" size={24} /><span>{query ? 'No employees match your search' : 'No employees yet'}</span></div>}
@@ -106,24 +145,31 @@ export default function EmployeeManagement({ user }) {
 
     {drawer && <>
       <div className="scrim" onClick={close} />
-      <aside className="drawer" role="dialog" aria-modal="true" aria-label={editingId ? 'Edit employee' : 'Add employee'}>
-        <div className="drawer-head"><h2>{editingId ? 'Edit employee' : 'Add employee'}</h2><button className="icon-button" aria-label="Close" onClick={close}><Icon name="x" /></button></div>
-        <form className="employee-form" onSubmit={save}>
+      <aside className="drawer" role="dialog" aria-modal="true" aria-label={editingId ? 'Edit employee' : details ? 'Employee details' : 'Add employee'}>
+        <div className="drawer-head"><h2>{editingId ? 'Edit employee' : details ? 'Employee details' : 'Add employee'}</h2><button className="icon-button" aria-label="Close" onClick={close}><Icon name="x" /></button></div>
+        {details && !editingId ? <div className="employee-detail">
+          <div className="detail-person"><div className="detail-photo"><span>{initials(details.fullName)}</span><img src={details.pictureUrl} alt="" onError={event => {event.currentTarget.style.display = 'none';}} /></div><div><h3>{details.fullName}</h3><p>{details.employeeCode} · {details.active ? 'Active' : 'Inactive'}</p></div></div>
+          <dl><dt>Work email</dt><dd>{details.workEmail}</dd><dt>Department</dt><dd>{details.department || 'Not assigned'}</dd><dt>Designation</dt><dd>{details.designation || 'Not assigned'}</dd><dt>Level</dt><dd>{details.level || 'Not assigned'}</dd><dt>Reporting manager</dt><dd>{details.reportingManagerName || 'Not assigned'}</dd><dt>Date of joining</dt><dd>{details.dateOfJoining}</dd><dt>Date of birth</dt><dd>{details.dateOfBirth || 'Not provided'}</dd><dt>Phone</dt><dd>{details.phone || 'Not provided'}</dd><dt>Address</dt><dd>{details.address || 'Not provided'}</dd></dl>
+          {canUpdate && <button className="btn primary" onClick={() => edit(details)}>Edit profile</button>}
+        </div> : <form className="employee-form" onSubmit={save}>
           <div className="form-body">
             <fieldset><legend>Personal</legend>
               <Field label="Full name" wide><input required value={form.fullName} onChange={e => set('fullName', e.target.value)} /></Field>
               <Field label="Employee ID"><input required disabled={Boolean(editingId)} value={form.employeeCode} onChange={e => set('employeeCode', e.target.value)} /></Field>
               <Field label="Date of birth"><input type="date" value={form.dateOfBirth} onChange={e => set('dateOfBirth', e.target.value)} /></Field>
-              <Field label="Profile picture" wide><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => setPicture(e.target.files?.[0] || null)} /></Field>
+              <Field label="Profile picture" wide><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { const file = e.target.files?.[0] || null; if (file && file.size > 2_000_000) { setError('Profile picture must be at most 2 MB.'); e.target.value = ''; setPicture(null); } else setPicture(file); }} /></Field>
             </fieldset>
             <fieldset><legend>Work</legend>
               <Field label="Work email" wide><input required type="email" value={form.workEmail} onChange={e => set('workEmail', e.target.value)} /></Field>
               <Field label="Date of joining"><input required type="date" value={form.dateOfJoining} onChange={e => set('dateOfJoining', e.target.value)} /></Field>
-              {select('Department', 'departmentId', options.DEPARTMENT)}
-              {select('Designation', 'designationId', options.DESIGNATION)}
-              {select('Level', 'levelId', options.LEVEL)}
+              {!editingId && user.role === 'ROLE_SUPER_ADMIN' && <><Field label="Find existing account" wide><input value={accountSearch} onChange={e => setAccountSearch(e.target.value)} placeholder="Search available user accounts" /></Field>
+                <Field label="Link login account" wide><select value={form.accountId || ''} onChange={e => {const id = e.target.value ? Number(e.target.value) : null; set('accountId', id); setSelectedAccount(accounts.find(account => account.id === id) || null);}}><option value="">No account linked</option>{selectedAccount && !accounts.some(account => account.id === selectedAccount.id) && <option value={selectedAccount.id}>{selectedAccount.username}</option>}{accounts.map(account => <option key={account.id} value={account.id}>{account.username}</option>)}</select></Field></>}
+              {select('Department', 'departmentId', options.DEPARTMENT, details?.department)}
+              {select('Designation', 'designationId', options.DESIGNATION, details?.designation)}
+              {select('Level', 'levelId', options.LEVEL, details?.level)}
+              <Field label="Reporting manager search" wide><input value={managerSearch} onChange={e => setManagerSearch(e.target.value)} placeholder="Search by name or employee ID" /></Field>
               <Field label="Reporting manager" wide><select value={form.reportingManagerId || ''} onChange={e => set('reportingManagerId', e.target.value ? Number(e.target.value) : null)}>
-                <option value="">Not assigned</option>{employees.filter(e => e.active && e.id !== editingId).map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}</select></Field>
+                <option value="">Not assigned</option>{form.reportingManagerId && !managers.some(manager => manager.id === form.reportingManagerId) && <option value={form.reportingManagerId}>{details?.reportingManagerName || 'Current manager'}</option>}{managers.filter(manager => manager.id !== editingId).map(manager => <option key={manager.id} value={manager.id}>{manager.fullName} · {manager.employeeCode}</option>)}</select></Field>
             </fieldset>
             <fieldset><legend>Contact</legend>
               <Field label="Phone"><input value={form.phone} onChange={e => set('phone', e.target.value)} /></Field>
@@ -131,7 +177,7 @@ export default function EmployeeManagement({ user }) {
             </fieldset>
           </div>
           <div className="form-foot"><button type="button" className="btn" onClick={close}>Cancel</button><button className="btn primary" disabled={busy}>{editingId ? 'Save changes' : 'Create employee'}</button></div>
-        </form>
+        </form>}
       </aside>
     </>}
   </>;

@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Login from './modules/login/Login.jsx';
 import Dashboard from './modules/dashboard/Dashboard.jsx';
 import EmployeeManagement from './modules/employees/EmployeeManagement.jsx';
+import OrganizationSetup from './modules/organization/OrganizationSetup.jsx';
 import Layout from './components/Layout.jsx';
 import { api, type CurrentUser } from './api/client';
 
@@ -33,6 +34,7 @@ export default function App() {
         <Route element={user ? <Layout user={user} onLogout={logout} /> : <Navigate to="/login" replace />}>
           <Route path="/dashboard" element={<Dashboard user={user!} />} />
           <Route path="/employees" element={user?.permissions.includes('EMPLOYEE_VIEW') ? <EmployeeManagement user={user} /> : <Navigate to="/dashboard" replace />} />
+          <Route path="/organization-setup" element={user && ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'].includes(user.role) && user.permissions.includes('DEPARTMENT_MANAGE') ? <OrganizationSetup /> : <Navigate to="/dashboard" replace />} />
         </Route>
         <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
       </Routes>

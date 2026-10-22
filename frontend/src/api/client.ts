@@ -40,7 +40,7 @@ export type Employee = {
   id: number; employeeCode: string; fullName: string; workEmail: string;
   designation: string | null; department: string | null; level: string | null;
   designationId: number | null; departmentId: number | null; levelId: number | null;
-  reportingManagerId: number | null; active: boolean; pictureUrl: string;
+  reportingManagerId: number | null; reportingManagerName: string | null; active: boolean; pictureUrl: string;
   address?: string | null; phone?: string | null; dateOfBirth?: string | null; dateOfJoining: string;
 };
 export type WorkdaySettings = {
@@ -54,21 +54,28 @@ export type BreakStatus = {
 export type Birthday = { employeeName: string; monthDay: string; today: boolean; nextOccurrence: string };
 export type Holiday = { date: string; name: string };
 export type Option = { id: number; kind: string; name: string };
+export type ManagedOption = Option & { active: boolean };
+export type ManagerOption = { id: number; employeeCode: string; fullName: string };
+export type AvailableAccount = { id: number; username: string };
 export type EmployeeInput = {
   employeeCode: string; fullName: string; workEmail: string; dateOfJoining: string;
   address?: string; phone?: string; dateOfBirth?: string;
   departmentId?: number | null; designationId?: number | null; levelId?: number | null;
   reportingManagerId?: number | null;
+  accountId?: number | null;
 };
 export const hrApi = {
   ownEmployee: () => request<Employee>('/api/employees/me'),
   employeeCount: () => request<{activeEmployees: number}>('/api/employees/count'),
+  managerOptions: (search = '') => request<ManagerOption[]>(`/api/employees/manager-options?search=${encodeURIComponent(search)}`),
+  availableAccounts: (search = '') => request<AvailableAccount[]>(`/api/admin/employee-accounts?search=${encodeURIComponent(search)}`),
   employees: (page = 0, search = '') => request<{content: Employee[]; totalPages: number; totalElements: number}>(`/api/employees?page=${page}&size=20&search=${encodeURIComponent(search)}`),
   createEmployee: (input: EmployeeInput) => request<Employee>('/api/employees', {method: 'POST', body: JSON.stringify(input)}),
   employee: (id: number) => request<Employee>(`/api/employees/${id}`),
   updateEmployee: (id: number, input: EmployeeInput) => request<Employee>(`/api/employees/${id}`, {method: 'PUT', body: JSON.stringify(input)}),
   uploadPicture: (id: number, file: File) => {const body = new FormData(); body.set('file', file); return request<void>(`/api/employees/${id}/picture`, {method: 'POST', body});},
   deactivateEmployee: (id: number) => request<void>(`/api/employees/${id}/deactivate`, {method: 'POST'}),
+  reactivateEmployee: (id: number) => request<void>(`/api/employees/${id}/reactivate`, {method: 'POST'}),
   options: (kind: string) => request<Option[]>(`/api/organization/options?kind=${encodeURIComponent(kind)}`),
   settings: () => request<WorkdaySettings>('/api/workday/settings'),
   holidays: () => request<Holiday[]>('/api/workday/holidays?days=45'),
@@ -76,4 +83,17 @@ export const hrApi = {
   breakToday: () => request<BreakStatus>('/api/breaks/today'),
   startBreak: () => request<BreakStatus>('/api/breaks/start', {method: 'POST'}),
   endBreak: () => request<BreakStatus>('/api/breaks/end', {method: 'POST'}),
+};
+
+export const organizationApi = {
+  list: (kind: string) => request<ManagedOption[]>(`/api/admin/organization/options?kind=${encodeURIComponent(kind)}`),
+  create: (kind: string, name: string) => request<ManagedOption>('/api/admin/organization/options', {
+    method: 'POST', body: JSON.stringify({ kind, name }),
+  }),
+  rename: (id: number, name: string) => request<ManagedOption>(`/api/admin/organization/options/${id}`, {
+    method: 'PUT', body: JSON.stringify({ name }),
+  }),
+  setActive: (id: number, active: boolean) => request<ManagedOption>(`/api/admin/organization/options/${id}/status`, {
+    method: 'PUT', body: JSON.stringify({ active }),
+  }),
 };

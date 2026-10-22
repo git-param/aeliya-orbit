@@ -11,6 +11,7 @@ import com.aeliya.orbit.modules.user.repository.UserRepository;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Locale;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -25,6 +26,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class EmployeeService {
+    public record ManagerOption(Long id, String employeeCode, String fullName) {}
+    public record AvailableAccount(Long id, String username) {}
     private final EmployeeRepository employees;
     private final OrganizationOptionRepository options;
     private final UserRepository users;
@@ -47,6 +50,27 @@ public class EmployeeService {
             ? employees.visible(PageRequest.of(page, size))
             : employees.visibleSearch(normalized, PageRequest.of(page, size));
         return result.map(e -> response(e, false));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ManagerOption> managerChoices(String search, Authentication actor) {
+        require(actor, "EMPLOYEE_VIEW");
+        String normalized = search == null || search.isBlank() ? null : search.trim().toLowerCase(Locale.ROOT);
+        if (normalized != null && normalized.length() > 100) throw bad("Search is too long");
+        List<Employee> choices = normalized == null ? employees.managerChoices(PageRequest.of(0, 30))
+            : employees.managerChoicesSearch(normalized, PageRequest.of(0, 30));
+        return choices.stream().map(e -> new ManagerOption(e.getId(), e.getEmployeeCode(), e.getFullName())).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AvailableAccount> availableAccounts(String search, Authentication actor) {
+        require(actor, "ROLE_SUPER_ADMIN");
+        String normalized = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
+        if (normalized.length() > 100) throw bad("Search is too long");
+        return jdbc.query("SELECT u.id, u.username FROM users u WHERE u.active = true AND u.role = 'ROLE_USER' " +
+                "AND NOT EXISTS (SELECT 1 FROM employees e WHERE e.account_id = u.id) " +
+                "AND lower(u.username) LIKE ? ORDER BY u.username LIMIT 30",
+            (rs, row) -> new AvailableAccount(rs.getLong(1), rs.getString(2)), "%" + normalized + "%");
     }
 
     @Transactional(readOnly = true)
@@ -106,6 +130,15 @@ public class EmployeeService {
         if (e.getAccount() != null) e.getAccount().setActive(false);
     }
 
+    @Transactional
+    public void reactivate(long id, Authentication actor) {
+        require(actor, "EMPLOYEE_UPDATE");
+        Employee e = visible(id);
+        e.setActive(true);
+        e.setUpdatedBy(actorUser(actor));
+        // Account activation is a separate security decision; do not restore login here.
+    }
+
     @Transactional(readOnly = true)
     public long activeCount(Authentication actor) {
         require(actor, "EMPLOYEE_VIEW");
@@ -152,9 +185,9 @@ public class EmployeeService {
         if (in.dateOfBirth() != null && !in.dateOfBirth().isBefore(LocalDate.now())) throw bad("Invalid birth date");
         e.setDateOfJoining(in.dateOfJoining());
         e.setDateOfBirth(in.dateOfBirth());
-        e.setDesignation(option(in.designationId(), OrganizationOption.Kind.DESIGNATION));
-        e.setDepartment(option(in.departmentId(), OrganizationOption.Kind.DEPARTMENT));
-        e.setLevel(option(in.levelId(), OrganizationOption.Kind.LEVEL));
+        e.setDesignation(option(in.designationId(), OrganizationOption.Kind.DESIGNATION, e.getDesignation()));
+        e.setDepartment(option(in.departmentId(), OrganizationOption.Kind.DEPARTMENT, e.getDepartment()));
+        e.setLevel(option(in.levelId(), OrganizationOption.Kind.LEVEL, e.getLevel()));
         if (creating && in.accountId() != null) {
             if (!has(actor, "ROLE_SUPER_ADMIN")) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
             User account = users.findById(in.accountId()).filter(User::isActive)
@@ -174,9 +207,9 @@ public class EmployeeService {
         } else e.setReportingManager(null);
     }
 
-    private OrganizationOption option(Long id, OrganizationOption.Kind kind) {
+    private OrganizationOption option(Long id, OrganizationOption.Kind kind, OrganizationOption current) {
         if (id == null) return null;
-        return options.findById(id).filter(o -> o.isActive() && o.getKind() == kind)
+        return options.findById(id).filter(o -> o.getKind() == kind && (o.isActive() || current != null && id.equals(current.getId())))
             .orElseThrow(() -> bad("Invalid organization option"));
     }
 
@@ -188,7 +221,8 @@ public class EmployeeService {
         return new EmployeeResponse(e.getId(), e.getEmployeeCode(), e.getFullName(), e.getWorkEmail(),
             name(e.getDesignation()), name(e.getDepartment()), name(e.getLevel()),
             optionId(e.getDesignation()), optionId(e.getDepartment()), optionId(e.getLevel()),
-            e.getReportingManager() == null ? null : e.getReportingManager().getId(), e.isActive(),
+            e.getReportingManager() == null ? null : e.getReportingManager().getId(),
+            privateFields && e.getReportingManager() != null ? e.getReportingManager().getFullName() : null, e.isActive(),
             "/api/employees/" + e.getId() + "/picture", privateFields ? e.getAddress() : null,
             privateFields ? e.getPhone() : null, privateFields ? e.getDateOfBirth() : null,
             e.getDateOfJoining());

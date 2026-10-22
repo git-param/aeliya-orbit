@@ -2,6 +2,7 @@ package com.aeliya.orbit.modules.employee.repository;
 
 import com.aeliya.orbit.modules.employee.entity.Employee;
 import java.util.Optional;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -27,4 +28,9 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     boolean existsByAccountId(Long accountId);
     @Query("select count(e) from Employee e left join e.account a where e.active = true and (a is null or a.role <> 'ROLE_SUPER_ADMIN')")
     long countActiveVisible();
+    @Query("select e from Employee e left join e.account a where e.active = true and (a is null or a.role <> 'ROLE_SUPER_ADMIN') order by e.fullName")
+    List<Employee> managerChoices(Pageable pageable);
+    @Query("select e from Employee e left join e.account a where e.active = true and (a is null or a.role <> 'ROLE_SUPER_ADMIN') " +
+           "and (lower(e.fullName) like concat('%', :search, '%') or lower(e.employeeCode) like concat('%', :search, '%')) order by e.fullName")
+    List<Employee> managerChoicesSearch(@Param("search") String search, Pageable pageable);
 }

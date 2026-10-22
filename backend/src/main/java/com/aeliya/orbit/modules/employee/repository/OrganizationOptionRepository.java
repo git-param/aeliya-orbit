@@ -6,5 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface OrganizationOptionRepository extends JpaRepository<OrganizationOption, Long> {
     List<OrganizationOption> findByKindAndActiveTrueOrderByName(OrganizationOption.Kind kind);
-    boolean existsByKindAndName(OrganizationOption.Kind kind, String name);
+    List<OrganizationOption> findByKindOrderByName(OrganizationOption.Kind kind);
+    boolean existsByKindAndNameIgnoreCase(OrganizationOption.Kind kind, String name);
+    boolean existsByKindAndNameIgnoreCaseAndIdNot(OrganizationOption.Kind kind, String name, Long id);
 }

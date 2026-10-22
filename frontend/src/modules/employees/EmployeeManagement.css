@@ -37,3 +37,14 @@ tbody tr:hover { background: var(--soft); }
 @media (max-width: 520px) { .form-body fieldset { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .scrim, .drawer { animation: none; } }
 .toolbar-end { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.employee-detail { display: grid; gap: 24px; align-content: start; overflow-y: auto; padding: 24px; }
+.detail-person { display: flex; align-items: center; gap: 16px; }
+.detail-person h3 { margin: 0 0 4px; font-size: 20px; }
+.detail-person p { margin: 0; color: var(--muted); font-size: 13px; }
+.detail-photo { position: relative; display: grid; place-items: center; flex: none; width: 72px; height: 72px; border-radius: 50%; overflow: hidden; background: var(--accent-soft); color: var(--accent); font-size: 24px; font-weight: 700; }
+.detail-photo img { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+.employee-detail dl { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr; gap: 0 12px; margin: 0; border-top: 1px solid var(--border); }
+.employee-detail dt, .employee-detail dd { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.employee-detail dt { color: var(--muted); }
+.employee-detail .btn { justify-self: start; }
+@media (max-width: 520px) { .employee-detail dl { grid-template-columns: 1fr; } .employee-detail dt { padding-bottom: 2px; border: 0; } .employee-detail dd { padding-top: 0; } }

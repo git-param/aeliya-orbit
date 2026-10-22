@@ -29,6 +29,8 @@
 .brand-name { font-family: "Bricolage Grotesque", sans-serif; font-size: 20px; font-weight: 700; line-height: 1.1; }
 .brand-product { font-size: 12px; color: #8d94a0; }
 .navigation { display: flex; flex-direction: column; gap: 4px; }
+.nav-group { display: grid; gap: 4px; margin-bottom: 14px; }
+.nav-label { display: block; padding: 2px 12px 8px; color: #737d8b; font-size: 10px; font-weight: 700; letter-spacing: .12em; }
 .nav-item { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; color: #aab0ba; text-decoration: none; font-size: 14px; font-weight: 500; transition: .15s; }
 .nav-item:hover { color: #fff; background: rgba(255,255,255,.07); }
 .nav-item.active { color: #f3cf6a; background: rgba(200,148,26,.16); }

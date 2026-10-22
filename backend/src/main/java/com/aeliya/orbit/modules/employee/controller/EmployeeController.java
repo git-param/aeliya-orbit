@@ -18,6 +18,7 @@ public class EmployeeController {
     private final EmployeeService employees;
     public EmployeeController(EmployeeService employees) { this.employees = employees; }
 
+
     @GetMapping
     public Page<EmployeeResponse> list(@RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
@@ -27,6 +28,10 @@ public class EmployeeController {
     public EmployeeResponse own(Authentication actor) { return employees.own(actor); }
     @GetMapping("/count")
     public Map<String, Long> count(Authentication actor) { return Map.of("activeEmployees", employees.activeCount(actor)); }
+    @GetMapping("/manager-options")
+    public java.util.List<EmployeeService.ManagerOption> managers(@RequestParam(required = false) String search, Authentication actor) {
+        return employees.managerChoices(search, actor);
+    }
     @GetMapping("/{id}")
     public EmployeeResponse get(@PathVariable long id, Authentication actor) { return employees.get(id, actor); }
     @PostMapping
@@ -40,6 +45,11 @@ public class EmployeeController {
     @PostMapping("/{id}/deactivate")
     public ResponseEntity<Void> deactivate(@PathVariable long id, Authentication actor) {
         employees.deactivate(id, actor);
+        return ResponseEntity.noContent().build();
+    }
+    @PostMapping("/{id}/reactivate")
+    public ResponseEntity<Void> reactivate(@PathVariable long id, Authentication actor) {
+        employees.reactivate(id, actor);
         return ResponseEntity.noContent().build();
     }
     @PostMapping(path = "/{id}/picture", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

@@ -6,7 +6,8 @@ import "../modules/dashboard/Dashboard.css";
 
 const pages = {
   "/dashboard": { title: "Overview", subtitle: () => new Intl.DateTimeFormat("en-IN", { dateStyle: "full" }).format(new Date()) },
-  "/employees": { title: "Employees", subtitle: () => "Everyone in your organization" },
+  "/employees": { title: "Employee Directory", subtitle: () => "Profiles and employment details" },
+  "/organization-setup": { title: "Organization Setup", subtitle: () => "Departments, designations, and levels" },
 };
 
 export default function TopNavbar({ darkMode, setDarkMode, onLogout, currentUser }) {

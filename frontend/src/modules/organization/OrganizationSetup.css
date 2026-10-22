@@ -1,0 +1,18 @@
+.organization-setup { max-width: 980px; }
+.setup-intro { margin-bottom: 20px; }
+.setup-intro h2 { margin: 0 0 4px; font-family: "Bricolage Grotesque", sans-serif; font-size: 22px; }
+.setup-intro p, .setup-card-head p { margin: 0; color: var(--muted); font-size: 13px; }
+.setup-tabs { display: flex; gap: 8px; margin-bottom: 18px; overflow-x: auto; }
+.setup-tabs button { padding: 9px 15px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--muted); cursor: pointer; white-space: nowrap; }
+.setup-tabs button.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: 700; }
+.setup-card { padding: 0; overflow: hidden; }
+.setup-card-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px; border-bottom: 1px solid var(--border); }
+.setup-card-head h3 { margin: 0 0 4px; font-size: 17px; }
+.setup-add { display: grid; gap: 8px; padding: 18px 20px; }
+.setup-add label { font-size: 13px; font-weight: 600; }
+.setup-add > div { display: flex; gap: 10px; }
+.setup-add .btn { display: inline-flex; align-items: center; gap: 6px; }
+.setup-actions, .setup-rename { display: flex; align-items: center; gap: 8px; }
+.setup-rename input { min-width: 160px; }
+.setup-empty { padding: 18px 20px; color: var(--muted); font-size: 13px; }
+@media (max-width: 650px) { .setup-add > div, .setup-rename { flex-wrap: wrap; } .setup-actions { flex-wrap: wrap; } }
