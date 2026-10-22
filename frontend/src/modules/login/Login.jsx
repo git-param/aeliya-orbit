@@ -3,22 +3,14 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Login.css';
 import logo from '../../assets/logo.png';
+import { api } from '../../api/client';
 
-const Login = () => {
+const Login = ({ onAuthenticated }) => {
     const [credentials, setCredentials] = useState({ username: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
-
-    // If a token already exists, redirect to dashboard immediately.
-    // This prevents a logged-in user from seeing the login page via back-navigation.
-    React.useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            navigate('/dashboard', { replace: true });
-        }
-    }, [navigate]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -36,28 +28,12 @@ const Login = () => {
         setIsLoading(true);
 
         try {
-            const response = await fetch('http://localhost:8080/api/auth/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(credentials),
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('role', data.role);
-
-                navigate('/dashboard', { replace: true });
-            } else {
-                const errorData = await response.text();
-                setError(errorData || 'Invalid username or password.');
-            }
+            await api.login(credentials.username, credentials.password);
+            const user = await api.me();
+            onAuthenticated(user);
+            navigate('/dashboard', { replace: true });
         } catch (err) {
-            console.error('Login error:', err);
-            setError('Unable to reach the authentication server. Is your backend active?');
+            setError(err.status === 401 ? 'Invalid username or password.' : 'Unable to complete sign in. Please try again.');
         } finally {
             setIsLoading(false);
         }

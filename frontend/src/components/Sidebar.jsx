@@ -12,10 +12,10 @@ const allNavItems = [
   { icon: "calendar", label: "Leave", allowedRoles: ["ALL"] },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ currentUser }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const rawRole = localStorage.getItem('role') || 'USER';
+  const rawRole = currentUser?.role || 'USER';
   const currentRole = rawRole.replace('ROLE_', '');
 
   const visibleNavItems = allNavItems.filter(item => {

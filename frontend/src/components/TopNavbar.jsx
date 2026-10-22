@@ -1,28 +1,16 @@
 // Top navigation bar component
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React from "react";
 import { Icon, Button, Heading } from "../UI.jsx";
 import "../modules/dashboard/Dashboard.css"; // shared styles
 
-export default function TopNavbar({ darkMode, setDarkMode, onLogout }) {
-  const [darkMode, setDarkMode] = useState(false);
-  const navigate = useNavigate();
+export default function TopNavbar({ darkMode, setDarkMode, onLogout, currentUser }) {
 
   // Update the document color scheme when darkMode changes
   React.useEffect(() => {
     document.documentElement.style.colorScheme = darkMode ? "dark" : "light";
   }, [darkMode]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    if (onLogout) onLogout();
-    navigate("/login", { replace: true });
-  };
-
-  // Retrieve current role for display
-  const rawRole = localStorage.getItem("role") || "USER";
-  const currentRole = rawRole.replace("ROLE_", "");
+  const currentRole = currentUser?.role?.replace("ROLE_", "") || "USER";
 
   return (
     <header className="topbar">
@@ -45,11 +33,11 @@ export default function TopNavbar({ darkMode, setDarkMode, onLogout }) {
         <div className="profile">
           <div className="avatar">AD</div>
           <div className="profile-copy">
-            <strong>Current User</strong>
+            <strong>{currentUser?.username || "Current User"}</strong>
             <span>{currentRole}</span>
           </div>
         </div>
-        <Button className="logout-button" onClick={handleLogout}>Logout</Button>
+        <Button className="logout-button" onClick={onLogout}>Logout</Button>
       </div>
     </header>
   );

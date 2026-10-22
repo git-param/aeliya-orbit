@@ -1,0 +1,6 @@
+.employee-page input, .employee-page select { width: 100%; max-width: 320px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+.employee-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 20px; }
+.employee-form label { display: grid; gap: 6px; text-transform: capitalize; }
+.employee-form button { align-self: end; }
+.employee-pagination { display: flex; gap: 16px; align-items: center; margin-top: 18px; }
+.employee-pagination button, .employee-page td button { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; cursor: pointer; }

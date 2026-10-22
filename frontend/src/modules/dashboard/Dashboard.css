@@ -721,3 +721,15 @@ td {
     padding: 10px 14px;
   }
 }
+
+.dashboard-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+.dashboard-panels .activity-card { min-width: 0; }
+.dashboard-panels h3 { margin: 0 0 8px; }
+.dashboard-panels p, .stat-card p { color: var(--muted, #778293); }
+.week-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; margin-top: 16px; }
+.week-day { display: flex; flex-direction: column; gap: 3px; align-items: center; padding: 10px 3px; border-radius: 8px; background: #e9edf2; color: #536070; font-size: 11px; }
+.week-day small { text-align: center; font-size: 9px; }
+.carousel-actions { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
+.dashboard-photo { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; margin-top: 8px; }
+.dashboard-error { color: #a73535; }
+@media (max-width: 700px) { .week-grid { grid-template-columns: repeat(4, 1fr); } }
