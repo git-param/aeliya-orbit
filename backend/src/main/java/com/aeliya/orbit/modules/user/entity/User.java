@@ -20,6 +20,9 @@ public class User {
     @Column(nullable = false)
     private String role; // e.g., "SUPER_ADMIN", "ADMIN", "USER"
 
+    @Column(nullable = false)
+    private boolean active = true;
+
     // Default constructor required by JPA
     public User() {}
 
@@ -58,4 +61,7 @@ public class User {
     { 
         this.role = role; 
     }
+
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
 }

@@ -82,3 +82,6 @@ build/
 
 application.yml
 compose.yaml
+# Environment-only defaults are safe to track; local overrides stay private.
+backend/src/main/resources/application-local.properties
+backend/src/main/resources/application.properties

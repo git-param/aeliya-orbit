@@ -1,10 +1,16 @@
 package com.aeliya.orbit.modules.login.controller;
 
 import com.aeliya.orbit.modules.login.dto.LoginRequest;
-import com.aeliya.orbit.modules.login.dto.LoginResponse;
 import com.aeliya.orbit.modules.login.service.LoginService;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.util.Map;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,19 +19,32 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/auth")
 public class LoginController {
+    private final LoginService login;
 
-    @Autowired
-    private LoginService loginService;
+    public LoginController(LoginService login) {
+        this.login = login;
+    }
+
+    @GetMapping("/csrf")
+    public Map<String, String> csrf(CsrfToken token) {
+        return Map.of("token", token.getToken());
+    }
 
     @PostMapping("/login")
-    public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<?> authenticate(@RequestBody LoginRequest credentials,
+            HttpServletRequest request, HttpServletResponse response) {
         try {
-            // The service will handle authentication and token generation
-            LoginResponse response = loginService.authenticate(loginRequest);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-             // Return 401 Unauthorized if login fails
+            login.authenticate(credentials, request, response);
+            return ResponseEntity.ok(Map.of("status", "authenticated"));
+        } catch (AuthenticationException ex) {
             return ResponseEntity.status(401).body("Invalid username or password");
         }
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
+        if (request.getSession(false) != null) request.getSession(false).invalidate();
+        SecurityContextHolder.clearContext();
+        return ResponseEntity.noContent().build();
     }
 }
