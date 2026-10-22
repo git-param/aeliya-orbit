@@ -8,6 +8,7 @@ const groups = [
   { label: "WORKSPACE", items: [{ icon: "dashboard", label: "Dashboard", to: "/dashboard" }] },
   { label: "PEOPLE", items: [{ icon: "users", label: "Employees", to: "/employees", modules: ["101", "102"] }] },
   { label: "ADMINISTRATION", items: [
+    { icon: "users", label: "Account Passwords", to: "/account-passwords", roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
     { icon: "settings", label: "Organization Setup", to: "/organization-setup", permission: "DEPARTMENT_MANAGE", roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
     { icon: "settings", label: "Department Permissions", to: "/department-permissions", permission: "DEPARTMENT_MANAGE", roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
   ] },

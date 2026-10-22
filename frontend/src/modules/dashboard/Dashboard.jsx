@@ -47,6 +47,25 @@ function Hourglass({ progress, running }) {
 
 const Empty = ({ icon, text }) => <div className="empty"><Icon name={icon} size={22} /><span>{text}</span></div>;
 
+function BirthdayCarousel({ birthdays }) {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    if (birthdays.length < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = setInterval(() => setIndex(current => (current + 1) % birthdays.length), 6000);
+    return () => clearInterval(timer);
+  }, [birthdays.length]);
+  const birthday = birthdays[index % birthdays.length];
+  return <div className="birthday-carousel" aria-roledescription="carousel" aria-label="Upcoming birthdays">
+    <div className="birthday-portrait"><span>{initials(birthday.employeeName)}</span><img key={birthday.employeeId} src={birthday.portraitUrl} alt={`Portrait of ${birthday.employeeName}`} onError={e => {e.currentTarget.style.display = 'none';}} /></div>
+    <div className="birthday-caption"><strong>{birthday.employeeName}</strong><span className={`tag ${birthday.today ? 'today' : ''}`}>{birthday.today ? 'Today' : shortDate(birthday.nextOccurrence)}</span></div>
+    {birthdays.length > 1 && <div className="birthday-controls">
+      <button className="btn" type="button" aria-label="Previous birthday" onClick={() => setIndex(current => (current - 1 + birthdays.length) % birthdays.length)}>‹</button>
+      <span>{index + 1} of {birthdays.length}</span>
+      <button className="btn" type="button" aria-label="Next birthday" onClick={() => setIndex(current => (current + 1) % birthdays.length)}>›</button>
+    </div>}
+  </div>;
+}
+
 export default function Dashboard({ user }) {
   const [now, setNow] = useState(new Date());
   const [data, setData] = useState({health: null, employee: null, settings: null, holidays: [], birthdays: [], breaks: null, count: null});
@@ -113,7 +132,7 @@ export default function Dashboard({ user }) {
           <div className="stat-head"><span className="chip violet"><Icon name="user" /></span>My profile</div>
           <div className="stat-body">
             <div><strong className="stat-value">{data.employee?.employeeCode || 'Not linked'}</strong><p>{data.employee?.department || 'No department assigned'}</p></div>
-            {data.employee && <div className="photo"><span>{initials(data.employee.fullName)}</span><img src={data.employee.pictureUrl} alt="" onError={e => {e.currentTarget.style.display = 'none';}} /></div>}
+            {data.employee && <div className="photo"><span>{initials(data.employee.fullName)}</span><img src={data.employee.pictureUrl} alt="" style={{objectPosition: `${data.employee.profileFocusX}% ${data.employee.profileFocusY}%`}} onError={e => {e.currentTarget.style.display = 'none';}} /></div>}
           </div>
         </article>
         <article className="card stat">
@@ -148,10 +167,8 @@ export default function Dashboard({ user }) {
 
       <section className="card birthday-card">
         <div className="card-title"><h3>Birthdays</h3><Icon name="cake" /></div>
-        {data.birthdays.length ? <ul className="list">{data.birthdays.map(b => <li key={`${b.employeeName}${b.nextOccurrence}`}>
-          <span className="person-avatar">{initials(b.employeeName)}</span><span className="grow">{b.employeeName}</span>
-          <span className={`tag ${b.today ? 'today' : ''}`}>{b.today ? 'Today' : shortDate(b.nextOccurrence)}</span></li>)}</ul>
-          : <Empty icon="cake" text="No birthdays in the next month" />}
+        {data.birthdays.length ? <BirthdayCarousel birthdays={data.birthdays} />
+          : <Empty icon="cake" text="No more birthdays this month" />}
       </section>
 
       <section className="card small-card"><div className="card-title"><h3>Absent today</h3><Icon name="users" /></div><Empty icon="inbox" text="Appears once attendance is finalized" /></section>

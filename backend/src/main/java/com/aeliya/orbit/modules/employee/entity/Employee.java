@@ -20,6 +20,10 @@ public class Employee {
     private String address;
     @Column(length = 30)
     private String phone;
+    @Column(name = "profile_focus_x", nullable = false)
+    private int profileFocusX = 50;
+    @Column(name = "profile_focus_y", nullable = false)
+    private int profileFocusY = 50;
     @Column(name = "work_email", nullable = false)
     private String workEmail;
     @Column(name = "date_of_birth")
@@ -57,6 +61,10 @@ public class Employee {
     public void setAddress(String value) { address = value; }
     public String getPhone() { return phone; }
     public void setPhone(String value) { phone = value; }
+    public int getProfileFocusX() { return profileFocusX; }
+    public void setProfileFocusX(int value) { profileFocusX = value; }
+    public int getProfileFocusY() { return profileFocusY; }
+    public void setProfileFocusY(int value) { profileFocusY = value; }
     public String getWorkEmail() { return workEmail; }
     public void setWorkEmail(String value) { workEmail = value; }
     public LocalDate getDateOfBirth() { return dateOfBirth; }

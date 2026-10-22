@@ -4,6 +4,7 @@ import com.aeliya.orbit.modules.employee.dto.EmployeeRequest;
 import com.aeliya.orbit.modules.employee.dto.EmployeeResponse;
 import com.aeliya.orbit.modules.employee.service.EmployeeService;
 import java.io.IOException;
+import org.springframework.core.io.Resource;
 import java.util.Map;
 import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
@@ -58,11 +59,11 @@ public class EmployeeController {
         return ResponseEntity.noContent().build();
     }
     @GetMapping("/{id}/picture")
-    public ResponseEntity<byte[]> picture(@PathVariable long id, Authentication actor) {
+    public ResponseEntity<Resource> picture(@PathVariable long id, Authentication actor) throws IOException {
         EmployeeService.Picture picture = employees.picture(id, actor);
         return picture == null ? ResponseEntity.notFound().build() : ResponseEntity.ok()
             .contentType(MediaType.parseMediaType(picture.type()))
             .header("Cache-Control", "private, no-store")
-            .body(picture.bytes());
+            .body(picture.resource());
     }
 }

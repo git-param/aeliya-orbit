@@ -42,6 +42,7 @@ export type Employee = {
   designation: string | null; department: string | null; level: string | null;
   designationId: number | null; departmentId: number | null; levelId: number | null;
   reportingManagerId: number | null; reportingManagerName: string | null; active: boolean; pictureUrl: string;
+  profileFocusX: number; profileFocusY: number;
   address?: string | null; phone?: string | null; dateOfBirth?: string | null; dateOfJoining: string;
 };
 export type WorkdaySettings = {
@@ -52,26 +53,46 @@ export type BreakStatus = {
   consumedSeconds: number; remainingSeconds: number;
   allowanceMinutes: number; activeSince: string | null;
 };
-export type Birthday = { employeeName: string; monthDay: string; today: boolean; nextOccurrence: string };
+export type Birthday = { employeeId: number; employeeName: string; monthDay: string; today: boolean; nextOccurrence: string; portraitUrl: string };
+export type SecondaryPhone = { id: number; phone: string };
+export type SelfProfile = {
+  fullName: string; employeeCode: string; workEmail: string; address: string | null;
+  primaryPhone: string | null; focusX: number; focusY: number; pictureUrl: string;
+  secondaryPhones: SecondaryPhone[]; aadhaarUploaded: boolean; panUploaded: boolean; pictureUploaded: boolean;
+};
+export const profileApi = {
+  get: () => request<SelfProfile>('/api/profile'),
+  update: (address: string, focusX: number, focusY: number) => request<SelfProfile>('/api/profile', {
+    method: 'PUT', body: JSON.stringify({address, focusX, focusY}),
+  }),
+  addPhone: (phone: string) => request<SecondaryPhone[]>('/api/profile/phones', {
+    method: 'POST', body: JSON.stringify({phone}),
+  }),
+  deletePhone: (id: number) => request<SecondaryPhone[]>(`/api/profile/phones/${id}`, {method: 'DELETE'}),
+  deletePicture: () => request<void>('/api/profile/picture', {method: 'DELETE'}),
+  upload: (kind: 'picture' | 'aadhar' | 'pan', file: File) => {
+    const body = new FormData(); body.set('file', file);
+    return request<void>(`/api/profile/${kind}`, {method: 'POST', body});
+  },
+};
 export type Holiday = { date: string; name: string };
 export type Option = { id: number; kind: string; name: string };
 export type ManagedOption = Option & { active: boolean };
 export type ManagerOption = { id: number; employeeCode: string; fullName: string };
-export type AvailableAccount = { id: number; username: string };
 export type EmployeeInput = {
   employeeCode: string; fullName: string; workEmail: string; dateOfJoining: string;
   address?: string; phone?: string; dateOfBirth?: string;
   departmentId?: number | null; designationId?: number | null; levelId?: number | null;
   reportingManagerId?: number | null;
-  accountId?: number | null;
+  password?: string;
 };
+export type NewEmployeeInput = EmployeeInput & { password: string };
 export const hrApi = {
   ownEmployee: () => request<Employee>('/api/employees/me'),
   employeeCount: () => request<{activeEmployees: number}>('/api/employees/count'),
   managerOptions: (search = '') => request<ManagerOption[]>(`/api/employees/manager-options?search=${encodeURIComponent(search)}`),
-  availableAccounts: (search = '') => request<AvailableAccount[]>(`/api/admin/employee-accounts?search=${encodeURIComponent(search)}`),
   employees: (page = 0, search = '') => request<{content: Employee[]; totalPages: number; totalElements: number}>(`/api/employees?page=${page}&size=20&search=${encodeURIComponent(search)}`),
-  createEmployee: (input: EmployeeInput) => request<Employee>('/api/employees', {method: 'POST', body: JSON.stringify(input)}),
+  createEmployee: (input: NewEmployeeInput) => request<Employee>('/api/employees', {method: 'POST', body: JSON.stringify(input)}),
   employee: (id: number) => request<Employee>(`/api/employees/${id}`),
   updateEmployee: (id: number, input: EmployeeInput) => request<Employee>(`/api/employees/${id}`, {method: 'PUT', body: JSON.stringify(input)}),
   uploadPicture: (id: number, file: File) => {const body = new FormData(); body.set('file', file); return request<void>(`/api/employees/${id}/picture`, {method: 'POST', body});},
@@ -106,5 +127,14 @@ export const departmentPermissionApi = {
   departments: () => request<DepartmentPermission[]>('/api/admin/department-permissions'),
   replace: (id: number, version: number, moduleIds: string[]) => request<DepartmentPermission>(`/api/admin/department-permissions/${id}`, {
     method: 'PUT', body: JSON.stringify({ version, moduleIds }),
+  }),
+};
+
+export type ManagedAccount = { id: number; username: string; role: string; active: boolean };
+export const passwordManagementApi = {
+  accounts: (page = 0, search = '') => request<{content: ManagedAccount[]; totalElements: number; totalPages: number}>(
+    `/api/admin/users?page=${page}&search=${encodeURIComponent(search)}`),
+  change: (id: number, password: string) => request<void>(`/api/admin/users/${id}/password`, {
+    method: 'PUT', body: JSON.stringify({password}),
   }),
 };

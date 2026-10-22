@@ -18,6 +18,7 @@ frontend/dist/
 frontend/.eslintcache
 
 # Logs
+user-data/
 logs
 *.log
 npm-debug.log*

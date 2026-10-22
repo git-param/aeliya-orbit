@@ -13,13 +13,16 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Locale;
 import java.util.List;
-import java.util.Optional;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,20 +31,24 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class EmployeeService {
     public record ManagerOption(Long id, String employeeCode, String fullName) {}
-    public record AvailableAccount(Long id, String username) {}
     private final EmployeeRepository employees;
     private final OrganizationOptionRepository options;
     private final UserRepository users;
     private final JdbcTemplate jdbc;
     private final DepartmentModuleCache moduleCache;
+    private final PasswordEncoder passwordEncoder;
+    private final ProfileFileStore files;
 
     public EmployeeService(EmployeeRepository employees, OrganizationOptionRepository options,
-            UserRepository users, JdbcTemplate jdbc, DepartmentModuleCache moduleCache) {
+            UserRepository users, JdbcTemplate jdbc, DepartmentModuleCache moduleCache, PasswordEncoder passwordEncoder,
+            ProfileFileStore files) {
         this.employees = employees;
         this.options = options;
         this.users = users;
         this.jdbc = jdbc;
         this.moduleCache = moduleCache;
+        this.passwordEncoder = passwordEncoder;
+        this.files = files;
     }
 
     @Transactional(readOnly = true)
@@ -64,17 +71,6 @@ public class EmployeeService {
         List<Employee> choices = normalized == null ? employees.managerChoices(PageRequest.of(0, 30))
             : employees.managerChoicesSearch(normalized, PageRequest.of(0, 30));
         return choices.stream().map(e -> new ManagerOption(e.getId(), e.getEmployeeCode(), e.getFullName())).toList();
-    }
-
-    @Transactional(readOnly = true)
-    public List<AvailableAccount> availableAccounts(String search, Authentication actor) {
-        require(actor, "ROLE_SUPER_ADMIN");
-        String normalized = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
-        if (normalized.length() > 100) throw bad("Search is too long");
-        return jdbc.query("SELECT u.id, u.username FROM users u WHERE u.active = true AND u.role = 'ROLE_USER' " +
-                "AND NOT EXISTS (SELECT 1 FROM employees e WHERE e.account_id = u.id) " +
-                "AND lower(u.username) LIKE ? ORDER BY u.username LIMIT 30",
-            (rs, row) -> new AvailableAccount(rs.getLong(1), rs.getString(2)), "%" + normalized + "%");
     }
 
     @Transactional(readOnly = true)
@@ -102,13 +98,19 @@ public class EmployeeService {
         String code = required(input.employeeCode(), 40).toUpperCase(Locale.ROOT);
         if (!code.matches("[A-Z0-9][A-Z0-9_-]*") || employees.existsByEmployeeCode(code)) throw bad("Employee ID is invalid or already used");
         e.setEmployeeCode(code);
-        apply(e, input, actor, true);
+        apply(e, input);
+        String password = input.password();
+        if (password == null || password.length() < 8 || password.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72)
+            throw bad("Password must be at least 8 characters and at most 72 bytes");
+        if (users.findByUsernameIgnoreCase(e.getWorkEmail()).isPresent()) throw bad("Work email is already used as a login");
         e.setCreatedBy(editor);
         e.setUpdatedBy(editor);
-        try { Employee saved = employees.saveAndFlush(e);
+        try {
+            e.setAccount(users.saveAndFlush(new User(e.getWorkEmail(), passwordEncoder.encode(password), "ROLE_USER")));
+            Employee saved = employees.saveAndFlush(e);
             if (saved.getAccount() != null) moduleCache.refreshAccountAfterCommit(saved.getAccount().getId());
             return response(saved, true); }
-        catch (DataIntegrityViolationException ex) { throw bad("Employee ID, work email, or account is already used"); }
+        catch (DataIntegrityViolationException ex) { throw bad("Employee ID or work email is already used"); }
     }
 
     @Transactional
@@ -118,9 +120,14 @@ public class EmployeeService {
         Employee e = visible(id);
         if (input.employeeCode() != null && !input.employeeCode().trim().equalsIgnoreCase(e.getEmployeeCode()))
             throw bad("Employee ID cannot be changed");
-        if (input.accountId() != null && (e.getAccount() == null || !input.accountId().equals(e.getAccount().getId())))
-            throw bad("Account linkage cannot be changed");
-        apply(e, input, actor, false);
+        if (input.password() != null && !input.password().isEmpty()) throw bad("Password cannot be changed here");
+        apply(e, input);
+        if (e.getAccount() != null && !e.getAccount().getUsername().equals(e.getWorkEmail())) {
+            users.findByUsernameIgnoreCase(e.getWorkEmail()).ifPresent(existing -> {
+                if (!existing.getId().equals(e.getAccount().getId())) throw bad("Work email is already used as a login");
+            });
+            e.getAccount().setUsername(e.getWorkEmail());
+        }
         e.setUpdatedBy(actorUser(actor));
         try { Employee saved = employees.saveAndFlush(e);
             if (saved.getAccount() != null) moduleCache.refreshAccountAfterCommit(saved.getAccount().getId());
@@ -159,31 +166,26 @@ public class EmployeeService {
     public void savePicture(long id, MultipartFile file, Authentication actor) throws IOException {
         require(actor, "EMPLOYEE_UPDATE");
         Employee employee = visible(id);
-        if (file.isEmpty() || file.getSize() > 2_000_000) throw bad("Image must be at most 2 MB");
-        byte[] bytes = file.getBytes();
-        String type = file.getContentType();
-        boolean png = bytes.length >= 8 && (bytes[0] & 255) == 137 && bytes[1] == 80 && bytes[2] == 78 && bytes[3] == 71;
-        boolean jpeg = bytes.length >= 3 && (bytes[0] & 255) == 255 && (bytes[1] & 255) == 216 && (bytes[2] & 255) == 255;
-        boolean webp = bytes.length >= 12 && new String(bytes, 0, 4).equals("RIFF") && new String(bytes, 8, 4).equals("WEBP");
-        if (!(png && "image/png".equals(type) || jpeg && "image/jpeg".equals(type) || webp && "image/webp".equals(type)))
-            throw bad("Only PNG, JPEG, or WebP images are accepted");
-        jdbc.update("INSERT INTO employee_profile_images(employee_id, content_type, image_data) VALUES (?, ?, ?) " +
-            "ON CONFLICT (employee_id) DO UPDATE SET content_type = excluded.content_type, image_data = excluded.image_data, updated_at = CURRENT_TIMESTAMP",
-            id, type, bytes);
+        if (employee.getAccount() == null) throw bad("Employee has no linked user account");
+        files.save(employee.getAccount().getId(), ProfileFileStore.Kind.PROFILE, file);
         employee.setUpdatedBy(actorUser(actor));
     }
 
     @Transactional(readOnly = true)
-    public Picture picture(long id, Authentication actor) {
+    public Picture picture(long id, Authentication actor) throws IOException {
         Employee e = visible(id);
         if (!has(actor, "EMPLOYEE_VIEW") && !owns(e, actor)) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        if (e.getAccount() != null) {
+            var stored = files.find(e.getAccount().getId(), ProfileFileStore.Kind.PROFILE);
+            if (stored != null) return new Picture(stored.contentType(), new FileSystemResource(stored.path()));
+        }
         return jdbc.query("SELECT content_type, image_data FROM employee_profile_images WHERE employee_id = ?",
-            rs -> rs.next() ? new Picture(rs.getString(1), rs.getBytes(2)) : null, id);
+            rs -> rs.next() ? new Picture(rs.getString(1), new ByteArrayResource(rs.getBytes(2))) : null, id);
     }
 
-    public record Picture(String type, byte[] bytes) {}
+    public record Picture(String type, Resource resource) {}
 
-    private void apply(Employee e, EmployeeRequest in, Authentication actor, boolean creating) {
+    private void apply(Employee e, EmployeeRequest in) {
         if (in == null) throw bad("Employee details are required");
         e.setFullName(required(in.fullName(), 160));
         e.setAddress(optional(in.address(), 500));
@@ -198,13 +200,6 @@ public class EmployeeService {
         e.setDesignation(option(in.designationId(), OrganizationOption.Kind.DESIGNATION, e.getDesignation()));
         e.setDepartment(option(in.departmentId(), OrganizationOption.Kind.DEPARTMENT, e.getDepartment()));
         e.setLevel(option(in.levelId(), OrganizationOption.Kind.LEVEL, e.getLevel()));
-        if (creating && in.accountId() != null) {
-            if (!has(actor, "ROLE_SUPER_ADMIN")) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-            User account = users.findById(in.accountId()).filter(User::isActive)
-                .orElseThrow(() -> bad("Invalid account"));
-            if (!"ROLE_USER".equals(account.getRole()) || employees.existsByAccountId(account.getId())) throw bad("Account cannot be linked");
-            e.setAccount(account);
-        }
         if (in.reportingManagerId() != null) {
             Employee manager = visible(in.reportingManagerId());
             if (!manager.isActive() || manager == e) throw bad("Invalid manager");
@@ -233,7 +228,7 @@ public class EmployeeService {
             optionId(e.getDesignation()), optionId(e.getDepartment()), optionId(e.getLevel()),
             e.getReportingManager() == null ? null : e.getReportingManager().getId(),
             privateFields && e.getReportingManager() != null ? e.getReportingManager().getFullName() : null, e.isActive(),
-            "/api/employees/" + e.getId() + "/picture", privateFields ? e.getAddress() : null,
+            "/api/employees/" + e.getId() + "/picture", e.getProfileFocusX(), e.getProfileFocusY(), privateFields ? e.getAddress() : null,
             privateFields ? e.getPhone() : null, privateFields ? e.getDateOfBirth() : null,
             e.getDateOfJoining());
     }

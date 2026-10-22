@@ -4,7 +4,7 @@ import { Icon, initials } from '../../components/UI.jsx';
 import '../dashboard/Dashboard.css';
 import './EmployeeManagement.css';
 
-const blank = {employeeCode: '', accountId: null, fullName: '', workEmail: '', dateOfJoining: '', address: '', phone: '', dateOfBirth: '', departmentId: null, designationId: null, levelId: null, reportingManagerId: null};
+const blank = {employeeCode: '', password: '', fullName: '', workEmail: '', dateOfJoining: '', address: '', phone: '', dateOfBirth: '', departmentId: null, designationId: null, levelId: null, reportingManagerId: null};
 
 function Field({ label, wide, children }) {
   return <label className={`field ${wide ? 'wide' : ''}`}>{label}{children}</label>;
@@ -23,9 +23,6 @@ export default function EmployeeManagement({ user }) {
   const [picture, setPicture] = useState(null);
   const [managerSearch, setManagerSearch] = useState('');
   const [managers, setManagers] = useState([]);
-  const [accountSearch, setAccountSearch] = useState('');
-  const [accounts, setAccounts] = useState([]);
-  const [selectedAccount, setSelectedAccount] = useState(null);
   const [options, setOptions] = useState({DEPARTMENT: [], DESIGNATION: [], LEVEL: []});
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -37,7 +34,7 @@ export default function EmployeeManagement({ user }) {
   const canDeactivate = allows('104', 'EMPLOYEE_DEACTIVATE');
   const canUpdate = allows('103', 'EMPLOYEE_UPDATE');
   const set = (key, value) => setForm(f => ({...f, [key]: value}));
-  const close = () => {setDrawer(false); setDetails(null); setEditingId(null); setForm(blank); setPicture(null); setManagerSearch(''); setAccountSearch(''); setSelectedAccount(null);};
+  const close = () => {setDrawer(false); setDetails(null); setEditingId(null); setForm(blank); setPicture(null); setManagerSearch('');};
 
   const load = async (targetPage = page, targetQuery = query) => {
     setBusy(true);
@@ -61,14 +58,6 @@ export default function EmployeeManagement({ user }) {
     return () => { active = false; clearTimeout(timer); };
   }, [drawer, details, editingId, managerSearch]);
   useEffect(() => {
-    if (!drawer || editingId || details || user.role !== 'ROLE_SUPER_ADMIN') return;
-    let active = true;
-    const timer = setTimeout(() => hrApi.availableAccounts(accountSearch.trim())
-      .then(result => { if (active) setAccounts(result); })
-      .catch(() => { if (active) setError('Available account choices are unavailable.'); }), 250);
-    return () => { active = false; clearTimeout(timer); };
-  }, [drawer, editingId, details, accountSearch, user.role]);
-  useEffect(() => {
     if (!drawer) return;
     const onKey = e => e.key === 'Escape' && close();
     window.addEventListener('keydown', onKey);
@@ -78,14 +67,15 @@ export default function EmployeeManagement({ user }) {
   const save = async event => {
     event.preventDefault(); setBusy(true); setError(''); setNotice('');
     try {
-      const input = {...form, dateOfBirth: form.dateOfBirth || null};
+      const input = {...form, workEmail: form.workEmail.trim().toLowerCase(), dateOfBirth: form.dateOfBirth || null};
+      if (editingId) delete input.password;
       const saved = editingId ? await hrApi.updateEmployee(editingId, input) : await hrApi.createEmployee(input);
       if (picture) {
         try { await hrApi.uploadPicture(saved.id, picture); }
         catch { setNotice('Employee saved, but the picture could not be uploaded. Edit the profile to try again.'); }
-      } else setNotice(editingId ? 'Employee updated.' : 'Employee created.');
+      } else setNotice(editingId ? 'Employee updated.' : 'Employee and login created. The work email is the username.');
       close(); setPage(0); if (canView) await load(0, query);
-    } catch { setError('Employee could not be saved. Check the required fields and that the ID and email are unique.'); }
+    } catch { setError('Employee could not be saved. Check the required fields, password, and that the ID and work email are unique.'); }
     finally { setBusy(false); }
   };
   const edit = async employee => {
@@ -152,7 +142,7 @@ export default function EmployeeManagement({ user }) {
       <aside className="drawer" role="dialog" aria-modal="true" aria-label={editingId ? 'Edit employee' : details ? 'Employee details' : 'Add employee'}>
         <div className="drawer-head"><h2>{editingId ? 'Edit employee' : details ? 'Employee details' : 'Add employee'}</h2><button className="icon-button" aria-label="Close" onClick={close}><Icon name="x" /></button></div>
         {details && !editingId ? <div className="employee-detail">
-          <div className="detail-person"><div className="detail-photo"><span>{initials(details.fullName)}</span><img src={details.pictureUrl} alt="" onError={event => {event.currentTarget.style.display = 'none';}} /></div><div><h3>{details.fullName}</h3><p>{details.employeeCode} · {details.active ? 'Active' : 'Inactive'}</p></div></div>
+          <div className="detail-person"><div className="detail-photo"><span>{initials(details.fullName)}</span><img src={details.pictureUrl} alt="" style={{objectPosition: `${details.profileFocusX}% ${details.profileFocusY}%`}} onError={event => {event.currentTarget.style.display = 'none';}} /></div><div><h3>{details.fullName}</h3><p>{details.employeeCode} · {details.active ? 'Active' : 'Inactive'}</p></div></div>
           <dl><dt>Work email</dt><dd>{details.workEmail}</dd><dt>Department</dt><dd>{details.department || 'Not assigned'}</dd><dt>Designation</dt><dd>{details.designation || 'Not assigned'}</dd><dt>Level</dt><dd>{details.level || 'Not assigned'}</dd><dt>Reporting manager</dt><dd>{details.reportingManagerName || 'Not assigned'}</dd><dt>Date of joining</dt><dd>{details.dateOfJoining}</dd><dt>Date of birth</dt><dd>{details.dateOfBirth || 'Not provided'}</dd><dt>Phone</dt><dd>{details.phone || 'Not provided'}</dd><dt>Address</dt><dd>{details.address || 'Not provided'}</dd></dl>
           {canUpdate && <button className="btn primary" onClick={() => edit(details)}>Edit profile</button>}
         </div> : <form className="employee-form" onSubmit={save}>
@@ -161,13 +151,12 @@ export default function EmployeeManagement({ user }) {
               <Field label="Full name" wide><input required value={form.fullName} onChange={e => set('fullName', e.target.value)} /></Field>
               <Field label="Employee ID"><input required disabled={Boolean(editingId)} value={form.employeeCode} onChange={e => set('employeeCode', e.target.value)} /></Field>
               <Field label="Date of birth"><input type="date" value={form.dateOfBirth} onChange={e => set('dateOfBirth', e.target.value)} /></Field>
-              {canUpdate && <Field label="Profile picture" wide><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { const file = e.target.files?.[0] || null; if (file && file.size > 2_000_000) { setError('Profile picture must be at most 2 MB.'); e.target.value = ''; setPicture(null); } else setPicture(file); }} /></Field>}
+              {canUpdate && <Field label="Profile picture" wide><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => setPicture(e.target.files?.[0] || null)} /></Field>}
             </fieldset>
             <fieldset><legend>Work</legend>
-              <Field label="Work email" wide><input required type="email" value={form.workEmail} onChange={e => set('workEmail', e.target.value)} /></Field>
+              <Field label="Work email (login username)" wide><input required type="email" autoComplete="email" value={form.workEmail} onChange={e => set('workEmail', e.target.value)} /></Field>
+              {!editingId && <Field label="Login password (at least 8 characters)" wide><input required type="password" minLength={8} autoComplete="new-password" value={form.password} onChange={e => set('password', e.target.value)} /></Field>}
               <Field label="Date of joining"><input required type="date" value={form.dateOfJoining} onChange={e => set('dateOfJoining', e.target.value)} /></Field>
-              {!editingId && user.role === 'ROLE_SUPER_ADMIN' && <><Field label="Find existing account" wide><input value={accountSearch} onChange={e => setAccountSearch(e.target.value)} placeholder="Search available user accounts" /></Field>
-                <Field label="Link login account" wide><select value={form.accountId || ''} onChange={e => {const id = e.target.value ? Number(e.target.value) : null; set('accountId', id); setSelectedAccount(accounts.find(account => account.id === id) || null);}}><option value="">No account linked</option>{selectedAccount && !accounts.some(account => account.id === selectedAccount.id) && <option value={selectedAccount.id}>{selectedAccount.username}</option>}{accounts.map(account => <option key={account.id} value={account.id}>{account.username}</option>)}</select></Field></>}
               {select('Department', 'departmentId', options.DEPARTMENT, details?.department)}
               {select('Designation', 'designationId', options.DESIGNATION, details?.designation)}
               {select('Level', 'levelId', options.LEVEL, details?.level)}
@@ -176,7 +165,7 @@ export default function EmployeeManagement({ user }) {
                 <option value="">Not assigned</option>{form.reportingManagerId && !managers.some(manager => manager.id === form.reportingManagerId) && <option value={form.reportingManagerId}>{details?.reportingManagerName || 'Current manager'}</option>}{managers.filter(manager => manager.id !== editingId).map(manager => <option key={manager.id} value={manager.id}>{manager.fullName} · {manager.employeeCode}</option>)}</select></Field>
             </fieldset>
             <fieldset><legend>Contact</legend>
-              <Field label="Phone"><input value={form.phone} onChange={e => set('phone', e.target.value)} /></Field>
+              <Field label="Primary mobile"><input value={form.phone} onChange={e => set('phone', e.target.value)} /></Field>
               <Field label="Address" wide><input value={form.address} onChange={e => set('address', e.target.value)} /></Field>
             </fieldset>
           </div>
