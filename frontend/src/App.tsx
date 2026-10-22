@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Login from './modules/login/Login.jsx';
 import Dashboard from './modules/dashboard/Dashboard.jsx';
 import EmployeeManagement from './modules/employees/EmployeeManagement.jsx';
+import Layout from './components/Layout.jsx';
 import { api, type CurrentUser } from './api/client';
 
 export default function App() {
@@ -29,8 +30,10 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login onAuthenticated={setUser} />} />
-        <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={logout} /> : <Navigate to="/login" replace />} />
-        <Route path="/employees" element={user && user.permissions.includes('EMPLOYEE_VIEW') ? <EmployeeManagement user={user} onLogout={logout} /> : <Navigate to={user ? '/dashboard' : '/login'} replace />} />
+        <Route element={user ? <Layout user={user} onLogout={logout} /> : <Navigate to="/login" replace />}>
+          <Route path="/dashboard" element={<Dashboard user={user!} />} />
+          <Route path="/employees" element={user?.permissions.includes('EMPLOYEE_VIEW') ? <EmployeeManagement user={user} /> : <Navigate to="/dashboard" replace />} />
+        </Route>
         <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
       </Routes>
     </BrowserRouter>
