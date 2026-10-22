@@ -16,10 +16,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class PermissionService {
     private final JdbcTemplate jdbc;
     private final UserRepository users;
+    private final DepartmentModuleCache moduleCache;
 
-    public PermissionService(JdbcTemplate jdbc, UserRepository users) {
+    public PermissionService(JdbcTemplate jdbc, UserRepository users, DepartmentModuleCache moduleCache) {
         this.jdbc = jdbc;
         this.users = users;
+        this.moduleCache = moduleCache;
     }
 
     public Set<String> authoritiesFor(User user) {
@@ -27,11 +29,22 @@ public class PermissionService {
         authorities.add(user.getRole());
         if ("ROLE_SUPER_ADMIN".equals(user.getRole())) {
             authorities.addAll(catalog());
+            authorities.addAll(moduleCache.allModuleAuthorities());
         } else {
             authorities.addAll(jdbc.queryForList(
                 "SELECT permission_code FROM role_permission_grants WHERE role = ?", String.class, user.getRole()));
             authorities.addAll(jdbc.queryForList(
                 "SELECT permission_code FROM user_permission_grants WHERE user_id = ?", String.class, user.getId()));
+            if ("ROLE_USER".equals(user.getRole())) {
+                authorities.removeIf(code -> code.startsWith("EMPLOYEE_"));
+                for (String id : moduleCache.forAccount(user.getId())) {
+                    String code = moduleCache.permissionCode(id);
+                    if (code != null) { authorities.add(code); authorities.add("MODULE_" + id); }
+                }
+            } else if ("ROLE_ADMIN".equals(user.getRole())) {
+                authorities.add("EMPLOYEE_CREATE");
+                authorities.add("MODULE_102");
+            }
         }
         return authorities;
     }
@@ -57,6 +70,8 @@ public class PermissionService {
         checkEditor(actor);
         checkEditableRole(role);
         Set<String> desired = checkedPermissions(requested);
+        if ("ROLE_USER".equals(role) && desired.stream().anyMatch(code -> code.startsWith("EMPLOYEE_")))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee access is managed by department");
         // Serialize grant changes for this role, including an initially empty grant set.
         jdbc.queryForList("SELECT pg_advisory_xact_lock(hashtext(?))", "permission-role:" + role);
         Set<String> current = roleGrants(role);
@@ -77,6 +92,8 @@ public class PermissionService {
         checkEditor(actor);
         User target = editableUser(userId);
         Set<String> desired = checkedPermissions(requested);
+        if (desired.stream().anyMatch(code -> code.startsWith("EMPLOYEE_")))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee access is managed by department");
         // Lock the target row so concurrent replacements cannot lose updates.
         jdbc.queryForObject("SELECT id FROM users WHERE id = ? FOR UPDATE", Long.class, target.getId());
         Set<String> current = userGrants(userId);

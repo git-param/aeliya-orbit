@@ -4,6 +4,7 @@ import Login from './modules/login/Login.jsx';
 import Dashboard from './modules/dashboard/Dashboard.jsx';
 import EmployeeManagement from './modules/employees/EmployeeManagement.jsx';
 import OrganizationSetup from './modules/organization/OrganizationSetup.jsx';
+import DepartmentPermissions from './modules/organization/DepartmentPermissions.jsx';
 import Layout from './components/Layout.jsx';
 import { api, type CurrentUser } from './api/client';
 
@@ -33,8 +34,9 @@ export default function App() {
         <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login onAuthenticated={setUser} />} />
         <Route element={user ? <Layout user={user} onLogout={logout} /> : <Navigate to="/login" replace />}>
           <Route path="/dashboard" element={<Dashboard user={user!} />} />
-          <Route path="/employees" element={user?.permissions.includes('EMPLOYEE_VIEW') ? <EmployeeManagement user={user} /> : <Navigate to="/dashboard" replace />} />
+          <Route path="/employees" element={user && (user.moduleIds?.includes('101') || user.moduleIds?.includes('102') || (['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'].includes(user.role) && (user.permissions.includes('EMPLOYEE_VIEW') || user.permissions.includes('EMPLOYEE_CREATE')))) ? <EmployeeManagement user={user} /> : <Navigate to="/dashboard" replace />} />
           <Route path="/organization-setup" element={user && ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'].includes(user.role) && user.permissions.includes('DEPARTMENT_MANAGE') ? <OrganizationSetup /> : <Navigate to="/dashboard" replace />} />
+          <Route path="/department-permissions" element={user && ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'].includes(user.role) && user.permissions.includes('DEPARTMENT_MANAGE') ? <DepartmentPermissions /> : <Navigate to="/dashboard" replace />} />
         </Route>
         <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
       </Routes>

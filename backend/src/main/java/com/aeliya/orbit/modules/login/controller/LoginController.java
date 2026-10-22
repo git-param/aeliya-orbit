@@ -35,7 +35,10 @@ public class LoginController {
             HttpServletRequest request, HttpServletResponse response) {
         try {
             login.authenticate(credentials, request, response);
-            return ResponseEntity.ok(Map.of("status", "authenticated"));
+            var moduleIds = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .map(a -> a.getAuthority()).filter(code -> code.startsWith("MODULE_"))
+                .map(code -> code.substring(7)).sorted().toList();
+            return ResponseEntity.ok(Map.of("status", "authenticated", "moduleIds", moduleIds));
         } catch (AuthenticationException ex) {
             return ResponseEntity.status(401).body("Invalid username or password");
         }

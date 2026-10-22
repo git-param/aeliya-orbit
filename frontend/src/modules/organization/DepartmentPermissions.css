@@ -1,0 +1,12 @@
+.department-permissions-page { padding: 28px; max-width: 1100px; }
+.department-permissions-page header { margin-bottom: 24px; }
+.department-permissions-page h1 { margin: 0 0 6px; }
+.department-permissions-page header p { margin: 0; color: #687383; }
+.department-permissions-list { display: grid; gap: 18px; }
+.department-permission-card { padding: 24px; display: grid; gap: 20px; }
+.department-permission-card h2 { margin: 0; font-size: 19px; }
+.department-module-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.department-module-grid label { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #e1e6ed; border-radius: 10px; cursor: pointer; }
+.department-module-grid label span { display: grid; gap: 2px; }
+.department-module-grid small { color: #687383; }
+.department-permission-card .btn { justify-self: start; }

@@ -15,7 +15,8 @@ import static org.mockito.Mockito.*;
 
 class OrganizationOptionServiceTest {
     private final OrganizationOptionRepository repository = mock(OrganizationOptionRepository.class);
-    private final OrganizationOptionService service = new OrganizationOptionService(repository);
+    private final OrganizationOptionService service = new OrganizationOptionService(repository,
+        mock(org.springframework.jdbc.core.JdbcTemplate.class), mock(com.aeliya.orbit.modules.permission.service.DepartmentModuleCache.class));
 
     private Authentication actor(String... authorities) {
         return new UsernamePasswordAuthenticationToken("operator", null,

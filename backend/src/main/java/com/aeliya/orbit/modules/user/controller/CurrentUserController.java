@@ -18,7 +18,7 @@ public class CurrentUserController {
         this.users = users;
     }
 
-    public record CurrentUser(Long id, String username, String role, Set<String> permissions) {}
+    public record CurrentUser(Long id, String username, String role, Set<String> permissions, Set<String> moduleIds) {}
 
     @GetMapping("/api/me")
     public CurrentUser currentUser(Authentication authentication) {
@@ -29,6 +29,8 @@ public class CurrentUserController {
         authentication.getAuthorities().forEach(authority -> {
             if (!authority.getAuthority().startsWith("ROLE_")) permissions.add(authority.getAuthority());
         });
-        return new CurrentUser(user.getId(), user.getUsername(), user.getRole(), permissions);
+        Set<String> moduleIds = new TreeSet<>();
+        permissions.stream().filter(code -> code.startsWith("MODULE_")).forEach(code -> moduleIds.add(code.substring(7)));
+        return new CurrentUser(user.getId(), user.getUsername(), user.getRole(), permissions, moduleIds);
     }
 }

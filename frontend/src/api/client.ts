@@ -3,6 +3,7 @@ export type CurrentUser = {
   username: string;
   role: string;
   permissions: string[];
+  moduleIds: string[];
 };
 
 export class ApiError extends Error {
@@ -95,5 +96,15 @@ export const organizationApi = {
   }),
   setActive: (id: number, active: boolean) => request<ManagedOption>(`/api/admin/organization/options/${id}/status`, {
     method: 'PUT', body: JSON.stringify({ active }),
+  }),
+};
+
+export type DepartmentPermission = { id: number; name: string; active: boolean; version: number; moduleIds: string[] };
+export type PermissionModule = { id: string; name: string };
+export const departmentPermissionApi = {
+  modules: () => request<PermissionModule[]>('/api/admin/department-permissions/modules'),
+  departments: () => request<DepartmentPermission[]>('/api/admin/department-permissions'),
+  replace: (id: number, version: number, moduleIds: string[]) => request<DepartmentPermission>(`/api/admin/department-permissions/${id}`, {
+    method: 'PUT', body: JSON.stringify({ version, moduleIds }),
   }),
 };

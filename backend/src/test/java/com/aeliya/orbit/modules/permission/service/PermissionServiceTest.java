@@ -17,22 +17,25 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class PermissionServiceTest {
-    @Test void roleAndUserGrantsCombineButRoleIsNeverTakenFromClient() {
+    @Test void departmentModulesOverrideLegacyEmployeeGrants() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        PermissionService service = new PermissionService(jdbc, mock(UserRepository.class));
+        DepartmentModuleCache cache = mock(DepartmentModuleCache.class);
+        PermissionService service = new PermissionService(jdbc, mock(UserRepository.class), cache);
         User user = new User("employee", "hash", "ROLE_USER");
         ReflectionTestUtils.setField(user, "id", 5L);
         when(jdbc.queryForList(contains("role_permission_grants"), eq(String.class), eq("ROLE_USER")))
             .thenReturn(List.of("EMPLOYEE_VIEW"));
         when(jdbc.queryForList(contains("user_permission_grants"), eq(String.class), eq(5L)))
             .thenReturn(List.of("LEAVE_APPROVE"));
-        assertEquals(Set.of("ROLE_USER", "EMPLOYEE_VIEW", "LEAVE_APPROVE"), service.authoritiesFor(user));
+        when(cache.forAccount(5L)).thenReturn(Set.of("102"));
+        when(cache.permissionCode("102")).thenReturn("EMPLOYEE_CREATE");
+        assertEquals(Set.of("ROLE_USER", "MODULE_102", "EMPLOYEE_CREATE", "LEAVE_APPROVE"), service.authoritiesFor(user));
     }
 
     @Test void nonSuperAdminCannotChangeGrantsAndSuperAdminTargetIsHidden() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         UserRepository users = mock(UserRepository.class);
-        PermissionService service = new PermissionService(jdbc, users);
+        PermissionService service = new PermissionService(jdbc, users, mock(DepartmentModuleCache.class));
         var admin = new UsernamePasswordAuthenticationToken("admin", null,
             List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
         assertThrows(ResponseStatusException.class,
@@ -48,9 +51,36 @@ class PermissionServiceTest {
         verifyNoInteractions(jdbc);
     }
 
+    @Test void departmentRevocationRemovesEmployeeAuthorityOnNextResolution() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        DepartmentModuleCache cache = mock(DepartmentModuleCache.class);
+        PermissionService service = new PermissionService(jdbc, mock(UserRepository.class), cache);
+        User user = new User("member", "hash", "ROLE_USER");
+        ReflectionTestUtils.setField(user, "id", 9L);
+        when(jdbc.queryForList(contains("role_permission_grants"), eq(String.class), eq("ROLE_USER")))
+            .thenReturn(List.of("EMPLOYEE_CREATE"));
+        when(jdbc.queryForList(contains("user_permission_grants"), eq(String.class), eq(9L)))
+            .thenReturn(List.of("EMPLOYEE_CREATE"));
+        when(cache.forAccount(9L)).thenReturn(Set.of("102"), Set.of());
+        when(cache.permissionCode("102")).thenReturn("EMPLOYEE_CREATE");
+        assertTrue(service.authoritiesFor(user).contains("EMPLOYEE_CREATE"));
+        assertFalse(service.authoritiesFor(user).contains("EMPLOYEE_CREATE"));
+    }
+
+    @Test void adminCanCreateEmployeesByDefault() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        PermissionService service = new PermissionService(jdbc, mock(UserRepository.class), mock(DepartmentModuleCache.class));
+        User admin = new User("admin", "hash", "ROLE_ADMIN");
+        ReflectionTestUtils.setField(admin, "id", 11L);
+        assertTrue(service.authoritiesFor(admin).contains("EMPLOYEE_CREATE"));
+        assertTrue(service.authoritiesFor(admin).contains("MODULE_102"));
+    }
+
     public static void main(String[] args) {
         PermissionServiceTest test = new PermissionServiceTest();
-        test.roleAndUserGrantsCombineButRoleIsNeverTakenFromClient();
+        test.departmentModulesOverrideLegacyEmployeeGrants();
         test.nonSuperAdminCannotChangeGrantsAndSuperAdminTargetIsHidden();
+        test.departmentRevocationRemovesEmployeeAuthorityOnNextResolution();
+        test.adminCanCreateEmployeesByDefault();
     }
 }

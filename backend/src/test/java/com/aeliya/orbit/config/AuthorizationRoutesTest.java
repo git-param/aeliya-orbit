@@ -6,6 +6,8 @@ import com.aeliya.orbit.modules.login.service.LoginService;
 import com.aeliya.orbit.modules.employee.controller.OrganizationConfigController;
 import com.aeliya.orbit.modules.employee.service.OrganizationOptionService;
 import com.aeliya.orbit.modules.permission.controller.PermissionController;
+import com.aeliya.orbit.modules.permission.controller.DepartmentPermissionController;
+import com.aeliya.orbit.modules.permission.service.DepartmentPermissionService;
 import com.aeliya.orbit.modules.permission.service.PermissionService;
 import com.aeliya.orbit.modules.user.controller.CurrentUserController;
 import com.aeliya.orbit.modules.user.repository.UserRepository;
@@ -28,7 +30,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = {HealthController.class, LoginController.class, PermissionController.class, CurrentUserController.class, OrganizationConfigController.class})
+@WebMvcTest(controllers = {HealthController.class, LoginController.class, PermissionController.class, DepartmentPermissionController.class, CurrentUserController.class, OrganizationConfigController.class})
 @Import({SecurityConfig.class, SessionAccountFilter.class})
 class AuthorizationRoutesTest {
     @Autowired MockMvc mvc;
@@ -37,6 +39,7 @@ class AuthorizationRoutesTest {
     @MockitoBean UserRepository users;
     @MockitoBean LoginService login;
     @MockitoBean OrganizationOptionService organizationOptions;
+    @MockitoBean DepartmentPermissionService departmentPermissions;
 
     @BeforeEach void setup() {
         when(userDetails.loadUserByUsername(anyString())).thenAnswer(invocation ->
@@ -51,6 +54,7 @@ class AuthorizationRoutesTest {
         mvc.perform(get("/api/dashboard/birthdays")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/admin/organization/options").param("kind", "DEPARTMENT")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/admin/employee-accounts")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/admin/department-permissions")).andExpect(status().isUnauthorized());
     }
     @Test void loginRequiresCsrfButCsrfBootstrapIsPublic() throws Exception {
         mvc.perform(get("/api/auth/csrf")).andExpect(status().isOk());
@@ -66,6 +70,7 @@ class AuthorizationRoutesTest {
     void adminCannotReadOrChangeGrants() throws Exception {
         mvc.perform(get("/api/admin/permissions/users/1")).andExpect(status().isForbidden());
         mvc.perform(get("/api/admin/employee-accounts")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/department-permissions")).andExpect(status().isForbidden());
         mvc.perform(put("/api/admin/permissions/roles/ROLE_ADMIN").with(csrf())
             .contentType(MediaType.APPLICATION_JSON).content("{\"permissions\":[]}"))
             .andExpect(status().isForbidden());
@@ -91,6 +96,10 @@ class AuthorizationRoutesTest {
     void ordinaryUserCannotManageOrganizationEvenWithGrant() throws Exception {
         mvc.perform(get("/api/admin/organization/options").param("kind", "DEPARTMENT"))
             .andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/department-permissions")).andExpect(status().isForbidden());
+        mvc.perform(put("/api/admin/department-permissions/1").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"version\":0,\"moduleIds\":[\"102\"]}"))
+            .andExpect(status().isForbidden());
         mvc.perform(post("/api/admin/organization/options").with(csrf()).contentType(MediaType.APPLICATION_JSON)
             .content("{\"kind\":\"LEVEL\",\"name\":\"L1\"}"))
             .andExpect(status().isForbidden());
@@ -102,11 +111,13 @@ class AuthorizationRoutesTest {
     void adminGrantRevocationRemovesConfigAccess() throws Exception {
         mvc.perform(get("/api/admin/organization/options").param("kind", "DEPARTMENT"))
             .andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/department-permissions")).andExpect(status().isForbidden());
     }
     @Test @WithMockUser(username = "admin", authorities = {"ROLE_ADMIN", "DEPARTMENT_MANAGE"})
     void adminWithGrantCanReadOrganizationSetup() throws Exception {
         mvc.perform(get("/api/admin/organization/options").param("kind", "DEPARTMENT"))
             .andExpect(status().isOk());
+        mvc.perform(get("/api/admin/department-permissions")).andExpect(status().isOk());
     }
     @Test @WithMockUser(username = "root", roles = "SUPER_ADMIN")
     void superAdminCanReachGrantEndpoint() throws Exception {

@@ -30,9 +30,12 @@ export default function EmployeeManagement({ user }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
-  const canCreate = user.permissions.includes('EMPLOYEE_CREATE');
-  const canDeactivate = user.permissions.includes('EMPLOYEE_DEACTIVATE');
-  const canUpdate = user.permissions.includes('EMPLOYEE_UPDATE');
+  const privileged = user.role === 'ROLE_ADMIN' || user.role === 'ROLE_SUPER_ADMIN';
+  const allows = (id, code) => user.moduleIds?.includes(id) || (privileged && user.permissions.includes(code));
+  const canCreate = allows('102', 'EMPLOYEE_CREATE');
+  const canView = allows('101', 'EMPLOYEE_VIEW');
+  const canDeactivate = allows('104', 'EMPLOYEE_DEACTIVATE');
+  const canUpdate = allows('103', 'EMPLOYEE_UPDATE');
   const set = (key, value) => setForm(f => ({...f, [key]: value}));
   const close = () => {setDrawer(false); setDetails(null); setEditingId(null); setForm(blank); setPicture(null); setManagerSearch(''); setAccountSearch(''); setSelectedAccount(null);};
 
@@ -43,7 +46,7 @@ export default function EmployeeManagement({ user }) {
     finally { setBusy(false); }
   };
   useEffect(() => { const t = setTimeout(() => { setQuery(search.trim()); setPage(0); }, 300); return () => clearTimeout(t); }, [search]);
-  useEffect(() => { load(); }, [page, query]);
+  useEffect(() => { if (canView) load(); }, [page, query, canView]);
   useEffect(() => {
     Promise.all(['DEPARTMENT', 'DESIGNATION', 'LEVEL'].map(hrApi.options))
       .then(([DEPARTMENT, DESIGNATION, LEVEL]) => setOptions({DEPARTMENT, DESIGNATION, LEVEL}))
@@ -81,7 +84,7 @@ export default function EmployeeManagement({ user }) {
         try { await hrApi.uploadPicture(saved.id, picture); }
         catch { setNotice('Employee saved, but the picture could not be uploaded. Edit the profile to try again.'); }
       } else setNotice(editingId ? 'Employee updated.' : 'Employee created.');
-      close(); setPage(0); await load(0, query);
+      close(); setPage(0); if (canView) await load(0, query);
     } catch { setError('Employee could not be saved. Check the required fields and that the ID and email are unique.'); }
     finally { setBusy(false); }
   };
@@ -120,11 +123,11 @@ export default function EmployeeManagement({ user }) {
     {notice && <p role="status" className="banner">{notice}</p>}
     <section className="card directory">
       <div className="toolbar">
-        <div className="search"><Icon name="search" size={16} /><input aria-label="Search employees" placeholder="Search by name or employee ID" value={search} onChange={e => setSearch(e.target.value)} /></div>
+        {canView ? <div className="search"><Icon name="search" size={16} /><input aria-label="Search employees" placeholder="Search by name or employee ID" value={search} onChange={e => setSearch(e.target.value)} /></div> : <p>Create employee records for your department.</p>}
         <div className="toolbar-end">{busy && <span role="status" className="muted">Loading…</span>}
           {canCreate && <button className="btn primary" onClick={() => {close(); setDrawer(true);}}><Icon name="plus" size={15} /> Add employee</button>}</div>
       </div>
-      <div className="table-wrap"><table>
+      {canView && <><div className="table-wrap"><table>
         <thead><tr><th>Employee</th><th>Work email</th><th>Department</th><th>Designation</th><th>Status</th><th aria-label="Actions" /></tr></thead>
         <tbody>{employees.map(e => <tr key={e.id}>
           <td><div className="who"><span className="person-avatar">{initials(e.fullName)}</span><div><strong>{e.fullName}</strong><small>{e.employeeCode}</small></div></div></td>
@@ -141,6 +144,7 @@ export default function EmployeeManagement({ user }) {
       {!busy && employees.length === 0 && <div className="empty"><Icon name="users" size={24} /><span>{query ? 'No employees match your search' : 'No employees yet'}</span></div>}
       <div className="pager"><span>Page {page + 1} of {Math.max(1, pages)}</span>
         <div><button className="btn" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button><button className="btn" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>Next</button></div></div>
+      </>}
     </section>
 
     {drawer && <>
@@ -157,7 +161,7 @@ export default function EmployeeManagement({ user }) {
               <Field label="Full name" wide><input required value={form.fullName} onChange={e => set('fullName', e.target.value)} /></Field>
               <Field label="Employee ID"><input required disabled={Boolean(editingId)} value={form.employeeCode} onChange={e => set('employeeCode', e.target.value)} /></Field>
               <Field label="Date of birth"><input type="date" value={form.dateOfBirth} onChange={e => set('dateOfBirth', e.target.value)} /></Field>
-              <Field label="Profile picture" wide><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { const file = e.target.files?.[0] || null; if (file && file.size > 2_000_000) { setError('Profile picture must be at most 2 MB.'); e.target.value = ''; setPicture(null); } else setPicture(file); }} /></Field>
+              {canUpdate && <Field label="Profile picture" wide><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { const file = e.target.files?.[0] || null; if (file && file.size > 2_000_000) { setError('Profile picture must be at most 2 MB.'); e.target.value = ''; setPicture(null); } else setPicture(file); }} /></Field>}
             </fieldset>
             <fieldset><legend>Work</legend>
               <Field label="Work email" wide><input required type="email" value={form.workEmail} onChange={e => set('workEmail', e.target.value)} /></Field>

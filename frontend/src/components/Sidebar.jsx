@@ -6,14 +6,20 @@ import "../modules/dashboard/Dashboard.css";
 
 const groups = [
   { label: "WORKSPACE", items: [{ icon: "dashboard", label: "Dashboard", to: "/dashboard" }] },
-  { label: "PEOPLE", items: [{ icon: "users", label: "Employee Directory", to: "/employees", permission: "EMPLOYEE_VIEW" }] },
-  { label: "ADMINISTRATION", items: [{ icon: "settings", label: "Organization Setup", to: "/organization-setup", permission: "DEPARTMENT_MANAGE", roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] }] },
+  { label: "PEOPLE", items: [{ icon: "users", label: "Employees", to: "/employees", modules: ["101", "102"] }] },
+  { label: "ADMINISTRATION", items: [
+    { icon: "settings", label: "Organization Setup", to: "/organization-setup", permission: "DEPARTMENT_MANAGE", roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
+    { icon: "settings", label: "Department Permissions", to: "/department-permissions", permission: "DEPARTMENT_MANAGE", roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
+  ] },
 ];
 
 export default function Sidebar({ currentUser }) {
   const permissions = currentUser?.permissions || [];
+  const moduleIds = currentUser?.moduleIds || [];
   const visible = groups.map(group => ({...group, items: group.items.filter(item =>
-    (!item.permission || permissions.includes(item.permission)) && (!item.roles || item.roles.includes(currentUser?.role))
+    (!item.permission || permissions.includes(item.permission)) && (!item.roles || item.roles.includes(currentUser?.role)) &&
+    (!item.modules || item.modules.some(id => moduleIds.includes(id)) ||
+      (['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'].includes(currentUser?.role) && (permissions.includes('EMPLOYEE_VIEW') || permissions.includes('EMPLOYEE_CREATE'))))
   )})).filter(group => group.items.length);
 
   return (

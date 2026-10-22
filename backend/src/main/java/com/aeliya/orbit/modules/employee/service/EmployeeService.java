@@ -8,6 +8,7 @@ import com.aeliya.orbit.modules.employee.repository.EmployeeRepository;
 import com.aeliya.orbit.modules.employee.repository.OrganizationOptionRepository;
 import com.aeliya.orbit.modules.user.entity.User;
 import com.aeliya.orbit.modules.user.repository.UserRepository;
+import com.aeliya.orbit.modules.permission.service.DepartmentModuleCache;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Locale;
@@ -32,13 +33,15 @@ public class EmployeeService {
     private final OrganizationOptionRepository options;
     private final UserRepository users;
     private final JdbcTemplate jdbc;
+    private final DepartmentModuleCache moduleCache;
 
     public EmployeeService(EmployeeRepository employees, OrganizationOptionRepository options,
-            UserRepository users, JdbcTemplate jdbc) {
+            UserRepository users, JdbcTemplate jdbc, DepartmentModuleCache moduleCache) {
         this.employees = employees;
         this.options = options;
         this.users = users;
         this.jdbc = jdbc;
+        this.moduleCache = moduleCache;
     }
 
     @Transactional(readOnly = true)
@@ -54,7 +57,8 @@ public class EmployeeService {
 
     @Transactional(readOnly = true)
     public List<ManagerOption> managerChoices(String search, Authentication actor) {
-        require(actor, "EMPLOYEE_VIEW");
+        if (!has(actor, "EMPLOYEE_VIEW") && !has(actor, "EMPLOYEE_CREATE"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         String normalized = search == null || search.isBlank() ? null : search.trim().toLowerCase(Locale.ROOT);
         if (normalized != null && normalized.length() > 100) throw bad("Search is too long");
         List<Employee> choices = normalized == null ? employees.managerChoices(PageRequest.of(0, 30))
@@ -101,7 +105,9 @@ public class EmployeeService {
         apply(e, input, actor, true);
         e.setCreatedBy(editor);
         e.setUpdatedBy(editor);
-        try { return response(employees.saveAndFlush(e), true); }
+        try { Employee saved = employees.saveAndFlush(e);
+            if (saved.getAccount() != null) moduleCache.refreshAccountAfterCommit(saved.getAccount().getId());
+            return response(saved, true); }
         catch (DataIntegrityViolationException ex) { throw bad("Employee ID, work email, or account is already used"); }
     }
 
@@ -116,7 +122,9 @@ public class EmployeeService {
             throw bad("Account linkage cannot be changed");
         apply(e, input, actor, false);
         e.setUpdatedBy(actorUser(actor));
-        try { return response(employees.saveAndFlush(e), true); }
+        try { Employee saved = employees.saveAndFlush(e);
+            if (saved.getAccount() != null) moduleCache.refreshAccountAfterCommit(saved.getAccount().getId());
+            return response(saved, true); }
         catch (DataIntegrityViolationException ex) { throw bad("Work email is already used"); }
     }
 
@@ -128,6 +136,7 @@ public class EmployeeService {
         e.setUpdatedBy(actorUser(actor));
         // Preserve the employee and every historical record. Linked login is disabled too.
         if (e.getAccount() != null) e.getAccount().setActive(false);
+        if (e.getAccount() != null) moduleCache.refreshAccountAfterCommit(e.getAccount().getId());
     }
 
     @Transactional
@@ -136,6 +145,7 @@ public class EmployeeService {
         Employee e = visible(id);
         e.setActive(true);
         e.setUpdatedBy(actorUser(actor));
+        if (e.getAccount() != null) moduleCache.refreshAccountAfterCommit(e.getAccount().getId());
         // Account activation is a separate security decision; do not restore login here.
     }
 

@@ -2,9 +2,11 @@ package com.aeliya.orbit.modules.employee.service;
 
 import com.aeliya.orbit.modules.employee.entity.OrganizationOption;
 import com.aeliya.orbit.modules.employee.repository.OrganizationOptionRepository;
+import com.aeliya.orbit.modules.permission.service.DepartmentModuleCache;
 import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,8 +15,12 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class OrganizationOptionService {
     private final OrganizationOptionRepository options;
+    private final JdbcTemplate jdbc;
+    private final DepartmentModuleCache moduleCache;
 
-    public OrganizationOptionService(OrganizationOptionRepository options) { this.options = options; }
+    public OrganizationOptionService(OrganizationOptionRepository options, JdbcTemplate jdbc, DepartmentModuleCache moduleCache) {
+        this.options = options; this.jdbc = jdbc; this.moduleCache = moduleCache;
+    }
 
     public record OptionView(Long id, String kind, String name, boolean active) {
         static OptionView from(OrganizationOption option) {
@@ -38,7 +44,12 @@ public class OrganizationOptionService {
         if (input == null || input.kind() == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Option kind is required");
         String name = name(input.name());
         ensureAvailable(input.kind(), name, null);
-        try { return OptionView.from(options.saveAndFlush(new OrganizationOption(input.kind(), name))); }
+        try { OrganizationOption saved = options.saveAndFlush(new OrganizationOption(input.kind(), name));
+            if (input.kind() == OrganizationOption.Kind.DEPARTMENT) {
+                jdbc.update("INSERT INTO departments(id) VALUES (?)", saved.getId());
+                moduleCache.refreshDepartmentAfterCommit(saved.getId());
+            }
+            return OptionView.from(saved); }
         catch (DataIntegrityViolationException ex) { throw new ResponseStatusException(HttpStatus.CONFLICT, "Option already exists"); }
     }
 
