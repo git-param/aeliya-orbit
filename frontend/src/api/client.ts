@@ -100,7 +100,7 @@ export const organizationApi = {
 };
 
 export type DepartmentPermission = { id: number; name: string; active: boolean; version: number; moduleIds: string[] };
-export type PermissionModule = { id: string; name: string };
+export type PermissionModule = { id: string; name: string; section: string };
 export const departmentPermissionApi = {
   modules: () => request<PermissionModule[]>('/api/admin/department-permissions/modules'),
   departments: () => request<DepartmentPermission[]>('/api/admin/department-permissions'),

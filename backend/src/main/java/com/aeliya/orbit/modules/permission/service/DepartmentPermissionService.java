@@ -13,7 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class DepartmentPermissionService {
-    public record ModuleView(String id, String name) {}
+    public record ModuleView(String id, String name, String section) {}
     public record DepartmentView(long id, String name, boolean active, long version, Set<String> moduleIds) {}
     public record UpdateRequest(long version, Set<String> moduleIds) {}
 
@@ -30,8 +30,8 @@ public class DepartmentPermissionService {
     @Transactional(readOnly = true)
     public List<ModuleView> modules(Authentication actor) {
         requireManager(actor);
-        return jdbc.query("SELECT id, name FROM modules ORDER BY id",
-            (rs, row) -> new ModuleView(rs.getString(1), rs.getString(2)));
+        return jdbc.query("SELECT id, name, section FROM modules ORDER BY section, id",
+            (rs, row) -> new ModuleView(rs.getString(1), rs.getString(2), rs.getString(3)));
     }
 
     @Transactional(readOnly = true)

@@ -1,0 +1,1 @@
+ALTER TABLE modules ADD COLUMN section VARCHAR(80) NOT NULL DEFAULT 'Employee';
